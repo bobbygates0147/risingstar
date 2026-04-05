@@ -1,0 +1,29 @@
+<svg width="640" height="480" viewBox="0 0 640 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="480" rx="36" fill="#090B18"/>
+  <rect width="640" height="480" rx="36" fill="url(#bg)"/>
+  <circle cx="492" cy="126" r="116" fill="url(#moon)" fill-opacity="0.9"/>
+  <circle cx="492" cy="126" r="88" fill="#0D1020"/>
+  <path d="M78 380C162 282 236 253 338 217C426 186 505 152 596 78" stroke="url(#trail)" stroke-width="18" stroke-linecap="round"/>
+  <path d="M105 420C190 329 255 297 365 257C451 226 521 202 590 143" stroke="#F9FAFB" stroke-opacity="0.18" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="180" cy="146" r="72" fill="#60A5FA" fill-opacity="0.26"/>
+  <circle cx="180" cy="146" r="32" fill="#F5F3FF"/>
+  <rect x="88" y="332" width="180" height="72" rx="20" fill="#090B18" fill-opacity="0.34"/>
+  <path d="M118 374H242" stroke="#F9FAFB" stroke-opacity="0.54" stroke-width="6" stroke-linecap="round"/>
+  <path d="M118 354H210" stroke="#F9FAFB" stroke-opacity="0.28" stroke-width="6" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="74" y1="58" x2="592" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B0764"/>
+      <stop offset="0.4" stop-color="#312E81"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="moon" x1="440" y1="58" x2="560" y2="190" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5D0FE"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="106" y1="360" x2="564" y2="148" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A78BFA"/>
+      <stop offset="0.5" stop-color="#E879F9"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+</svg>

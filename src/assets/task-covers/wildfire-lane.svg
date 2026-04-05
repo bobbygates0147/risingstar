@@ -1,0 +1,23 @@
+<svg width="640" height="480" viewBox="0 0 640 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="480" rx="36" fill="#140B07"/>
+  <rect width="640" height="480" rx="36" fill="url(#bg)"/>
+  <path d="M112 404C154 312 216 246 278 205C328 173 382 150 462 110" stroke="url(#flame)" stroke-width="30" stroke-linecap="round"/>
+  <path d="M182 406C236 333 282 285 333 250C396 206 459 188 544 188" stroke="#FFF7ED" stroke-opacity="0.22" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="486" cy="118" r="68" fill="#FDBA74" fill-opacity="0.3"/>
+  <circle cx="486" cy="118" r="26" fill="#FFF7ED"/>
+  <rect x="96" y="84" width="234" height="108" rx="24" fill="#1C0D09" fill-opacity="0.42"/>
+  <path d="M132 124H284" stroke="#FFF7ED" stroke-opacity="0.46" stroke-width="10" stroke-linecap="round"/>
+  <path d="M132 158H248" stroke="#FFF7ED" stroke-opacity="0.22" stroke-width="8" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="74" y1="46" x2="578" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7F1D1D"/>
+      <stop offset="0.46" stop-color="#EA580C"/>
+      <stop offset="1" stop-color="#BE185D"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="146" y1="390" x2="454" y2="134" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="0.45" stop-color="#FB923C"/>
+      <stop offset="1" stop-color="#F43F5E"/>
+    </linearGradient>
+  </defs>
+</svg>

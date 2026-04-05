@@ -1,0 +1,30 @@
+<svg width="640" height="480" viewBox="0 0 640 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="480" rx="36" fill="#090B18"/>
+  <rect width="640" height="480" rx="36" fill="url(#bg)"/>
+  <rect x="72" y="72" width="496" height="336" rx="34" fill="#0B1220" fill-opacity="0.62" stroke="#F9FAFB" stroke-opacity="0.1" stroke-width="2"/>
+  <path d="M158 328L274 134L378 260L484 146L554 328H158Z" fill="url(#mountain)"/>
+  <path d="M114 344C190 290 246 278 312 292C395 311 468 366 530 366" stroke="#F9FAFB" stroke-opacity="0.18" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="452" cy="144" r="64" fill="url(#sun)"/>
+  <path d="M214 356L286 118" stroke="#67E8F9" stroke-opacity="0.75" stroke-width="5" stroke-linecap="round"/>
+  <path d="M282 120L384 280" stroke="#C084FC" stroke-opacity="0.78" stroke-width="5" stroke-linecap="round"/>
+  <path d="M382 280L514 182" stroke="#F9A8D4" stroke-opacity="0.75" stroke-width="5" stroke-linecap="round"/>
+  <rect x="106" y="106" width="74" height="74" rx="18" fill="#0F172A" fill-opacity="0.55"/>
+  <path d="M128 140H158" stroke="#F9FAFB" stroke-opacity="0.6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M128 158H146" stroke="#F9FAFB" stroke-opacity="0.3" stroke-width="6" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="98" y1="40" x2="554" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="0.48" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#581C87"/>
+    </linearGradient>
+    <linearGradient id="mountain" x1="198" y1="126" x2="514" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="0.48" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#FB7185"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(452 144) rotate(90) scale(64)">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#FB7185"/>
+    </radialGradient>
+  </defs>
+</svg>

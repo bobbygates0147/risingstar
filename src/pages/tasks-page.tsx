@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import {
   Clock3,
   Filter,
+  Heart,
   Palette,
   Play,
   Radio,
@@ -158,6 +159,7 @@ export function TasksPage() {
         <div className="mt-6 grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filteredTasks.map((task) => {
             const isCompleted = task.status === 'completed'
+            const isArtTask = task.type === 'Art'
             const actionLabel = isCompleted
               ? 'Completed'
               : task.status === 'live'
@@ -218,11 +220,20 @@ export function TasksPage() {
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-3">
                     <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                      Duration
+                      {isArtTask ? 'Action' : 'Duration'}
                     </p>
                     <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                      <Clock3 className="h-4 w-4 text-[var(--glow)]" />
-                      {task.duration}
+                      {isArtTask ? (
+                        <>
+                          <Heart className="h-4 w-4 text-[var(--warning)]" />
+                          Like
+                        </>
+                      ) : (
+                        <>
+                          <Clock3 className="h-4 w-4 text-[var(--glow)]" />
+                          {task.duration}
+                        </>
+                      )}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-3">

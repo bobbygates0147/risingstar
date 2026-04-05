@@ -64,8 +64,8 @@ export function AppShell() {
   return (
     <div className="relative min-h-screen overflow-x-clip">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-[rgba(124,58,237,0.18)] blur-3xl" />
-        <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-[rgba(59,130,246,0.14)] blur-3xl" />
+        <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-[rgba(59,130,246,0.14)] blur-3xl" />
+        <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-[rgba(124,58,237,0.18)] blur-3xl" />
         <div className="absolute bottom-24 right-16 h-64 w-64 rounded-full bg-[rgba(167,139,250,0.12)] blur-3xl" />
       </div>
 
@@ -77,14 +77,14 @@ export function AppShell() {
 
       <div
         className={clsx(
-          'relative min-h-screen transition-[padding] duration-300 lg:pr-3',
-          sidebarCollapsed ? 'lg:pl-[6.75rem]' : 'lg:pl-[17rem]',
+          'relative min-h-screen transition-[padding] duration-300 lg:pr-4',
+          sidebarCollapsed ? 'lg:pl-[7rem]' : 'lg:pl-[17.25rem]',
         )}
       >
         <div
           className={clsx(
-            'fixed top-0 right-0 left-0 z-20 transition-[left,right,top] duration-300 lg:top-2 lg:right-3',
-            sidebarCollapsed ? 'lg:left-[6.75rem]' : 'lg:left-[17rem]',
+            'fixed inset-x-0 top-0 z-40 px-0 sm:px-6 lg:top-3 lg:right-4 lg:px-0',
+            sidebarCollapsed ? 'lg:left-[7rem]' : 'lg:left-[17.25rem]',
           )}
         >
           <TopNavbar
@@ -100,8 +100,8 @@ export function AppShell() {
           />
         </div>
 
-        <main className="px-4 pb-28 pt-24 sm:px-6 sm:pt-28 lg:px-8 lg:pb-8 lg:pt-[6.85rem]">
-          <div className="mx-auto max-w-7xl">
+        <main className="px-4 pb-28 pt-24 sm:px-6 sm:pt-28 lg:px-6 lg:pb-8 lg:pt-[7.75rem]">
+          <div className="w-full">
             <Outlet />
           </div>
         </main>

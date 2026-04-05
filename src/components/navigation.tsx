@@ -17,7 +17,8 @@ import {
   UserRound,
   Wallet,
 } from 'lucide-react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { signOut } from '../lib/auth'
 
 type NavigationItem = {
   label: string
@@ -66,55 +67,17 @@ function BrandMark({ compact }: { compact: boolean }) {
 
 function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
   return (
-    <div className="thin-scrollbar flex h-full min-h-0 flex-col overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col">
       <div
         className={clsx(
-          'flex items-center gap-2.5 border-b border-[var(--border-soft)] px-3 py-4',
+          'shrink-0 flex items-center gap-2.5 border-b border-[var(--border-soft)] px-3 py-4',
           collapsed ? 'justify-center' : 'justify-start',
         )}
       >
         <BrandMark compact={collapsed} />
       </div>
 
-      <div className="px-2.5 pt-3">
-        <div
-          className={clsx(
-            'rounded-2xl border border-[var(--border-soft)] bg-[linear-gradient(145deg,var(--surface-hover),transparent)] p-3.5',
-            collapsed && 'px-2.5 py-3',
-          )}
-        >
-          <p
-            className={clsx(
-              'text-[10px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]',
-              collapsed && 'text-center',
-            )}
-          >
-            {collapsed ? 'T2' : 'Active tier'}
-          </p>
-          <div
-            className={clsx(
-              'mt-2.5 flex items-center gap-2.5',
-              collapsed && 'justify-center',
-            )}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgba(124,58,237,0.18)] text-[var(--glow)]">
-              <Bot className="h-4 w-4" />
-            </div>
-            {!collapsed && (
-              <div>
-                <p className="font-display text-base font-semibold text-[var(--text-primary)]">
-                  Tier 2
-                </p>
-                <p className="text-[11px] text-[var(--text-secondary)]">
-                  Daily queue unlocked
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <nav className="flex-1 px-2 py-4">
+      <nav className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-4">
         <div className="space-y-1.5">
           {navigationItems.map(({ href, icon: Icon, label }) => (
             <NavLink
@@ -156,7 +119,7 @@ function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
         </div>
       </nav>
 
-      <div className="px-2.5 pb-3">
+      <div className="shrink-0 px-2.5 pb-3">
         <div
           className={clsx(
             'surface-glow overflow-hidden rounded-2xl p-3.5',
@@ -227,7 +190,7 @@ export function NavigationSidebar({
     <>
       <aside
         className={clsx(
-          'sidebar-aura surface-grid fixed top-2 left-2 z-30 hidden h-[calc(100vh-1rem)] overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-sidebar)] backdrop-blur-xl transition-[width] duration-300 lg:block',
+          'sidebar-aura surface-grid fixed inset-y-3 left-3 z-30 hidden overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-sidebar)] backdrop-blur-xl transition-[width] duration-300 lg:block',
           collapsed ? 'w-[5.75rem]' : 'w-64',
         )}
       >
@@ -277,6 +240,7 @@ export function TopNavbar({
 }: TopNavbarProps) {
   const [accountOpen, setAccountOpen] = useState(false)
   const accountMenuRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -304,9 +268,9 @@ export function TopNavbar({
   }, [])
 
   return (
-    <header className="w-full border-b border-[var(--border-soft)] bg-[var(--header-bg)] backdrop-blur-xl lg:overflow-hidden lg:rounded-[28px] lg:border lg:shadow-[var(--shadow-panel)]">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="relative z-50 w-full border-b border-[var(--border-soft)] bg-[var(--header-bg)] backdrop-blur-xl lg:overflow-visible lg:rounded-[28px] lg:border lg:shadow-[var(--shadow-panel)]">
+      <div className="flex w-full items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"
             onClick={onOpenMobile}
@@ -333,14 +297,14 @@ export function TopNavbar({
             <h1 className="truncate font-display text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-3xl">
               {title}
             </h1>
-            <p className="hidden text-sm text-[var(--text-secondary)] sm:block">
+            <p className="hidden truncate text-sm text-[var(--text-secondary)] xl:block">
               {description}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-2.5 text-right lg:block">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-2.5 text-right xl:block">
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
               Daily pulse
             </p>
@@ -392,7 +356,7 @@ export function TopNavbar({
 
             <div
               className={clsx(
-                'absolute right-0 top-[calc(100%+0.75rem)] z-30 w-[min(21rem,calc(100vw-2rem))] origin-top-right rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-popup)] p-3 shadow-[var(--shadow-popup)] backdrop-blur-2xl transition',
+                'absolute right-0 top-[calc(100%+0.75rem)] z-[70] w-[min(21rem,calc(100vw-2rem))] origin-top-right rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-popup)] p-3 shadow-[var(--shadow-popup)] backdrop-blur-2xl transition',
                 accountOpen
                   ? 'pointer-events-auto scale-100 opacity-100'
                   : 'pointer-events-none scale-95 opacity-0',
@@ -485,7 +449,11 @@ export function TopNavbar({
 
                 <button
                   type="button"
-                  onClick={() => setAccountOpen(false)}
+                  onClick={() => {
+                    setAccountOpen(false)
+                    signOut()
+                    navigate('/login', { replace: true })
+                  }}
                   className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-rose-400">

@@ -56,12 +56,12 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)] xl:items-stretch">
         <div
-          className="surface-glow overflow-hidden rounded-[30px]"
+          className="surface-glow h-full overflow-hidden rounded-[30px]"
           style={{ backgroundImage: 'var(--gradient-hero-balance)' }}
         >
-          <div className="flex flex-col gap-6 p-6 sm:p-8">
+          <div className="flex h-full flex-col justify-between gap-6 p-6 sm:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="max-w-xl">
                 <p className="text-xs uppercase tracking-[0.28em] text-[var(--text-tertiary)]">
@@ -77,16 +77,16 @@ export function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--button-primary-bg)] px-4 text-sm font-semibold text-[var(--button-primary-text)] transition hover:bg-[var(--button-primary-hover)]"
+                  className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl bg-[var(--button-primary-bg)] px-4 text-sm font-semibold text-[var(--button-primary-text)] transition hover:bg-[var(--button-primary-hover)]"
                 >
                   Withdraw
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                  className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
                 >
                   Deposit
                 </button>
@@ -133,8 +133,8 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-6">
-          <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+        <div className="grid gap-3 xl:h-full xl:grid-rows-2">
+          <div className="h-full rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-4 shadow-[var(--shadow-panel)] backdrop-blur-xl">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
@@ -148,20 +148,20 @@ export function DashboardPage() {
                 {dashboardSummary.tierProgress}% to {dashboardSummary.nextTier}
               </div>
             </div>
-            <div className="mt-5 h-3 overflow-hidden rounded-full bg-[var(--surface-track)]">
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-[var(--surface-track)]">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] via-[var(--glow)] to-[var(--blue)]"
                 style={{ width: `${dashboardSummary.tierProgress}%` }}
               />
             </div>
-            <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
+            <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
               Reach the next deposit threshold to unlock higher daily rewards
               and faster queue rotation.
             </p>
           </div>
 
           <div
-            className="surface-glow rounded-[30px] p-6"
+            className="surface-glow h-full rounded-[30px] p-4"
             style={{ backgroundImage: 'var(--gradient-hero-accent)' }}
           >
             <div className="flex items-center justify-between gap-4">
@@ -177,13 +177,13 @@ export function DashboardPage() {
                 <Bot className="h-6 w-6" />
               </div>
             </div>
-            <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
+            <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
               Premium automation handles repetitive queue work, but still
               requires periodic human validation to preserve platform integrity.
             </p>
             <button
               type="button"
-              className="mt-5 inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+              className="mt-3 inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
               Activate automation
               <ArrowUpRight className="h-4 w-4" />
@@ -192,8 +192,8 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)] xl:items-stretch">
+        <div className="h-full rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
@@ -249,7 +249,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+        <div className="h-full rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
             Quick actions
           </p>
@@ -380,7 +380,7 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)] xl:items-stretch">
         <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
           <div className="flex items-center justify-between">
             <div>

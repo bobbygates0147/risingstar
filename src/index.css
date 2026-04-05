@@ -5,8 +5,8 @@
 :root {
   --bg-primary: #0b0f1a;
   --body-background:
-    radial-gradient(circle at top left, rgba(124, 58, 237, 0.24), transparent 28%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 24%),
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 24%),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.24), transparent 28%),
     linear-gradient(180deg, #0b0f1a 0%, #0d1320 100%);
   --grid-line: rgba(255, 255, 255, 0.03);
   --surface-panel: rgba(17, 24, 39, 0.82);
@@ -66,8 +66,8 @@
 :root[data-theme='light'] {
   --bg-primary: #eef2ff;
   --body-background:
-    radial-gradient(circle at top left, rgba(124, 58, 237, 0.14), transparent 30%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 24%),
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.14), transparent 30%),
     linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   --grid-line: rgba(15, 23, 42, 0.05);
   --surface-panel: rgba(255, 255, 255, 0.82);
@@ -218,58 +218,22 @@ button {
 }
 
 .sidebar-aura {
-  position: relative;
   isolation: isolate;
+  animation: sidebar-back-glow 4.2s ease-in-out infinite;
 }
 
-.sidebar-aura::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  border: 1px solid transparent;
-  pointer-events: none;
-  opacity: 0;
-  box-shadow:
-    0 0 0 1px rgba(167, 139, 250, 0),
-    0 0 0 rgba(124, 58, 237, 0),
-    inset 0 0 0 rgba(167, 139, 250, 0);
-  animation: sidebar-border-pulse 4.8s ease-in-out infinite;
-}
-
-@keyframes sidebar-border-pulse {
+@keyframes sidebar-back-glow {
   0%,
-  28%,
   100% {
-    opacity: 0;
     box-shadow:
-      0 0 0 1px rgba(167, 139, 250, 0),
-      0 0 0 rgba(124, 58, 237, 0),
-      inset 0 0 0 rgba(167, 139, 250, 0);
+      0 0 20px rgba(124, 58, 237, 0.18),
+      0 0 42px rgba(59, 130, 246, 0.1);
   }
 
-  46% {
-    opacity: 1;
+  50% {
     box-shadow:
-      0 0 0 1px rgba(167, 139, 250, 0.55),
-      0 0 10px rgba(124, 58, 237, 0.2),
-      inset 0 0 8px rgba(167, 139, 250, 0.08);
-  }
-
-  64% {
-    opacity: 0.3;
-    box-shadow:
-      0 0 0 1px rgba(167, 139, 250, 0.2),
-      0 0 5px rgba(124, 58, 237, 0.08),
-      inset 0 0 4px rgba(167, 139, 250, 0.04);
-  }
-
-  78% {
-    opacity: 0;
-    box-shadow:
-      0 0 0 1px rgba(167, 139, 250, 0),
-      0 0 0 rgba(124, 58, 237, 0),
-      inset 0 0 0 rgba(167, 139, 250, 0);
+      0 0 34px rgba(124, 58, 237, 0.34),
+      0 0 72px rgba(59, 130, 246, 0.2);
   }
 }
 

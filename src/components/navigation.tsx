@@ -11,7 +11,6 @@ import {
   LogOut,
   Menu,
   MoonStar,
-  ShieldCheck,
   Sparkles,
   SunMedium,
   UserRound,
@@ -434,42 +433,6 @@ export function TopNavbar({
                     </span>
                     <span className="block text-xs text-[var(--text-tertiary)]">
                       Automation status and usage controls
-                    </span>
-                  </span>
-                </Link>
-
-                <Link
-                  to="/artist"
-                  onClick={() => setAccountOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--blue)]">
-                    <Headphones className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-medium text-[var(--text-primary)]">
-                      Artist Dashboard
-                    </span>
-                    <span className="block text-xs text-[var(--text-tertiary)]">
-                      Upload music and launch campaigns
-                    </span>
-                  </span>
-                </Link>
-
-                <Link
-                  to="/admin"
-                  onClick={() => setAccountOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--warning)]">
-                    <ShieldCheck className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-medium text-[var(--text-primary)]">
-                      Admin Panel
-                    </span>
-                    <span className="block text-xs text-[var(--text-tertiary)]">
-                      Review users, alerts, and approvals
                     </span>
                   </span>
                 </Link>

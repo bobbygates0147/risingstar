@@ -6,7 +6,6 @@ import { ActivityPage } from './pages/activity-page'
 import { AdminPanelPage } from './pages/admin-panel-page'
 import { AIBotPage } from './pages/ai-bot-page'
 import { LoginPage, SignupPage } from './pages/auth-page'
-import { ArtistDashboardPage } from './pages/artist-dashboard-page'
 import { DashboardPage } from './pages/dashboard-page'
 import { PlaceholderPage } from './pages/placeholder-page'
 import { TaskPlayerPage } from './pages/task-player-page'
@@ -58,7 +57,6 @@ function App() {
               }
             />
             <Route path="/ai-bot" element={<AIBotPage />} />
-            <Route path="/artist" element={<ArtistDashboardPage />} />
             <Route path="/admin" element={<AdminPanelPage />} />
           </Route>
         </Route>

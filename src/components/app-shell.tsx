@@ -54,10 +54,6 @@ const pageMeta: Record<string, { title: string; description: string }> = {
     title: 'AI Bot',
     description: 'Configure automation status, limits, and compliance checkpoints.',
   },
-  '/artist': {
-    title: 'Artist Dashboard',
-    description: 'Upload songs, launch campaigns, and track promotion analytics.',
-  },
   '/admin': {
     title: 'Admin Panel',
     description: 'Monitor users, transactions, approvals, and fraud alerts.',

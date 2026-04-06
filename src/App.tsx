@@ -10,7 +10,6 @@ import { DashboardPage } from './pages/dashboard-page'
 import { PlaceholderPage } from './pages/placeholder-page'
 import { TaskPlayerPage } from './pages/task-player-page'
 import { TasksPage } from './pages/tasks-page'
-import { WalletPage } from './pages/wallet-page'
 
 function RequireAuth() {
   return isAuthenticated() ? <Outlet /> : <Navigate to="/login" replace />
@@ -45,7 +44,15 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/tasks/:taskId" element={<TaskPlayerPage />} />
-            <Route path="/wallet" element={<WalletPage />} />
+            <Route
+              path="/wallet"
+              element={
+                <PlaceholderPage
+                  title="Wallet"
+                  description="Deposit, withdrawal, and transaction history controls are being rebuilt and will return in the next pass."
+                />
+              }
+            />
             <Route path="/activity" element={<ActivityPage />} />
             <Route
               path="/profile"

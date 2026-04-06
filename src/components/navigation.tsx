@@ -70,7 +70,7 @@ function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
     <div className="flex h-full min-h-0 flex-col">
       <div
         className={clsx(
-          'shrink-0 flex items-center gap-2.5 border-b border-[var(--border-soft)] px-3 py-4',
+          'shrink-0 flex h-20 items-center gap-2.5 border-b border-[var(--border-soft)] px-3',
           collapsed ? 'justify-center' : 'justify-start',
         )}
       >
@@ -278,7 +278,7 @@ export function TopNavbar({
           : 'lg:rounded-[28px]',
       )}
     >
-      <div className="flex w-full items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="flex h-20 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"

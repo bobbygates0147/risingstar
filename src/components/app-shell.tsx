@@ -34,6 +34,10 @@ const pageMeta: Record<string, { title: string; description: string }> = {
     title: 'Tasks',
     description: 'Manage the live music, art, and ad queue with filters tuned for mobile and desktop.',
   },
+  '/tasks/player': {
+    title: 'Task Player',
+    description: 'Complete music, ad, and art sessions with timer validation to unlock rewards.',
+  },
   '/wallet': {
     title: 'Wallet',
     description: 'Manage deposits, withdrawals, and your payout history.',
@@ -48,12 +52,20 @@ const pageMeta: Record<string, { title: string; description: string }> = {
   },
 }
 
+function resolvePageMeta(pathname: string) {
+  if (pathname.startsWith('/tasks/')) {
+    return pageMeta['/tasks/player']
+  }
+
+  return pageMeta[pathname] ?? pageMeta['/']
+}
+
 export function AppShell() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
-  const activePage = pageMeta[location.pathname] ?? pageMeta['/']
+  const activePage = resolvePageMeta(location.pathname)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -83,12 +95,13 @@ export function AppShell() {
       >
         <div
           className={clsx(
-            'fixed inset-x-0 top-0 z-40 px-0 sm:px-6 lg:top-3 lg:right-4 lg:px-0',
-            sidebarCollapsed ? 'lg:left-[7rem]' : 'lg:left-[17.25rem]',
+            'fixed inset-x-0 top-0 z-40 px-0 sm:px-6 lg:top-3 lg:right-3 lg:px-0',
+            sidebarCollapsed ? 'lg:left-[6.5rem]' : 'lg:left-[16.75rem]',
           )}
         >
           <TopNavbar
             description={activePage.description}
+            joinedToSidebar
             onOpenMobile={() => setMobileOpen(true)}
             onToggleCollapse={() => setSidebarCollapsed((current) => !current)}
             onToggleTheme={() =>

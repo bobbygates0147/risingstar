@@ -366,13 +366,13 @@ export function DashboardPage() {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
+                  <Link
+                    to={`/tasks/${task.id}`}
                     className="mt-5 inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
                   >
                     <ActionIcon className="h-4 w-4" />
                     {getPreviewActionLabel(task.type)}
-                  </button>
+                  </Link>
                 </div>
               </article>
             )

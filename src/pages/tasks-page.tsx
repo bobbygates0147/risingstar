@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { rewardTasks, type TaskType } from '../data/platform-data'
 import { formatUsd } from '../lib/format'
 
@@ -165,6 +166,7 @@ export function TasksPage() {
               : task.status === 'live'
                 ? 'Resume Task'
                 : 'Start Task'
+            const taskPlayerPath = `/tasks/${task.id}`
 
             return (
               <article
@@ -251,19 +253,24 @@ export function TasksPage() {
                   <span>{task.engagement} engagement</span>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={isCompleted}
-                  className={clsx(
-                    'mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border text-sm font-semibold transition',
-                    isCompleted
-                      ? 'cursor-not-allowed border-[var(--border-soft)] bg-[var(--surface-subtle)] text-[var(--text-tertiary)]'
-                      : 'border-[var(--border-strong)] bg-[rgba(124,58,237,0.14)] text-[var(--text-primary)] hover:bg-[rgba(124,58,237,0.22)]',
-                  )}
-                >
-                  <Play className="h-4 w-4" />
-                  {actionLabel}
-                </button>
+                {isCompleted ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-5 inline-flex h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] text-sm font-semibold text-[var(--text-tertiary)]"
+                  >
+                    <Play className="h-4 w-4" />
+                    {actionLabel}
+                  </button>
+                ) : (
+                  <Link
+                    to={taskPlayerPath}
+                    className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[rgba(124,58,237,0.14)] text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[rgba(124,58,237,0.22)]"
+                  >
+                    <Play className="h-4 w-4" />
+                    {actionLabel}
+                  </Link>
+                )}
               </article>
             )
           })}

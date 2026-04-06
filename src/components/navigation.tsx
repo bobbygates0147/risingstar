@@ -190,7 +190,7 @@ export function NavigationSidebar({
     <>
       <aside
         className={clsx(
-          'sidebar-aura surface-grid fixed inset-y-3 left-3 z-30 hidden overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-sidebar)] backdrop-blur-xl transition-[width] duration-300 lg:block',
+          'sidebar-aura surface-grid fixed inset-y-3 left-3 z-30 hidden overflow-hidden rounded-[28px] rounded-tr-none border border-[var(--border-soft)] bg-[var(--surface-sidebar)] backdrop-blur-xl transition-[width] duration-300 lg:block',
           collapsed ? 'w-[5.75rem]' : 'w-64',
         )}
       >
@@ -221,6 +221,7 @@ export function NavigationSidebar({
 
 type TopNavbarProps = {
   description: string
+  joinedToSidebar?: boolean
   onOpenMobile: () => void
   onToggleCollapse: () => void
   onToggleTheme: () => void
@@ -231,6 +232,7 @@ type TopNavbarProps = {
 
 export function TopNavbar({
   description,
+  joinedToSidebar = false,
   onOpenMobile,
   onToggleCollapse,
   onToggleTheme,
@@ -268,7 +270,14 @@ export function TopNavbar({
   }, [])
 
   return (
-    <header className="relative z-50 w-full border-b border-[var(--border-soft)] bg-[var(--header-bg)] backdrop-blur-xl lg:overflow-visible lg:rounded-[28px] lg:border lg:shadow-[var(--shadow-panel)]">
+    <header
+      className={clsx(
+        'relative z-50 w-full border-b border-[var(--border-soft)] bg-[var(--header-bg)] backdrop-blur-xl lg:overflow-visible lg:border lg:shadow-[var(--shadow-panel)]',
+        joinedToSidebar
+          ? 'lg:rounded-r-[28px] lg:rounded-l-none lg:border-l-0'
+          : 'lg:rounded-[28px]',
+      )}
+    >
       <div className="flex w-full items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button

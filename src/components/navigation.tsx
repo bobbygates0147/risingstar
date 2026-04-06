@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
   SunMedium,
+  UserRound,
   Wallet,
 } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -31,6 +32,7 @@ const navigationItems: NavigationItem[] = [
   { label: 'Tasks', href: '/tasks', icon: Headphones, mobileLabel: 'Tasks' },
   { label: 'Wallet', href: '/wallet', icon: Wallet, mobileLabel: 'Wallet' },
   { label: 'Activity', href: '/activity', icon: Activity, mobileLabel: 'Log' },
+  { label: 'Profile', href: '/profile', icon: UserRound, mobileLabel: 'Me' },
 ]
 
 type SidebarContentProps = {
@@ -506,7 +508,7 @@ export function MobileBottomNav() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4 pb-4 lg:hidden">
       <nav className="pointer-events-auto mx-auto max-w-xl rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-bottomnav)] p-2 shadow-[var(--shadow-popup)] backdrop-blur-xl">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {navigationItems.map(({ href, icon: Icon, mobileLabel }) => (
             <NavLink
               key={href}

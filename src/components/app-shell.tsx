@@ -46,6 +46,10 @@ const pageMeta: Record<string, { title: string; description: string }> = {
     title: 'Activity',
     description: 'Review recent earnings, completed tasks, and withdrawal events.',
   },
+  '/profile': {
+    title: 'Profile',
+    description: 'Update account settings, tiers, notifications, and payment methods.',
+  },
   '/ai-bot': {
     title: 'AI Bot',
     description: 'Configure automation status, limits, and compliance checkpoints.',

@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/dashboard-page'
 import { PlaceholderPage } from './pages/placeholder-page'
 import { TaskPlayerPage } from './pages/task-player-page'
 import { TasksPage } from './pages/tasks-page'
+import { WalletPage } from './pages/wallet-page'
 
 function RequireAuth() {
   return isAuthenticated() ? <Outlet /> : <Navigate to="/login" replace />
@@ -42,19 +43,8 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/tasks/:taskId" element={<TaskPlayerPage />} />
-            <Route
-              path="/wallet"
-              element={
-                <PlaceholderPage
-                  title="Wallet"
-                  description="Deposits, withdrawals, and transaction states will live here once the payment flow is wired."
-                />
-              }
-            />
-            <Route
-              path="/activity"
-              element={<ActivityPage />}
-            />
+            <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/activity" element={<ActivityPage />} />
             <Route
               path="/profile"
               element={

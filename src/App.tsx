@@ -1,11 +1,14 @@
-import { useLayoutEffect } from 'react'
+﻿import { useLayoutEffect } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/app-shell'
 import { isAuthenticated } from './lib/auth'
-import { LoginPage, SignupPage } from './pages/auth-page'
 import { ActivityPage } from './pages/activity-page'
+import { AdminPanelPage } from './pages/admin-panel-page'
+import { AIBotPage } from './pages/ai-bot-page'
+import { LoginPage, SignupPage } from './pages/auth-page'
+import { ArtistDashboardPage } from './pages/artist-dashboard-page'
 import { DashboardPage } from './pages/dashboard-page'
-import { PlaceholderPage } from './pages/placeholder-page'
+import { ProfilePage } from './pages/profile-page'
 import { TaskPlayerPage } from './pages/task-player-page'
 import { TasksPage } from './pages/tasks-page'
 import { WalletPage } from './pages/wallet-page'
@@ -45,24 +48,14 @@ function App() {
             <Route path="/tasks/:taskId" element={<TaskPlayerPage />} />
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/activity" element={<ActivityPage />} />
-            <Route
-              path="/profile"
-              element={
-                <PlaceholderPage
-                  title="Profile"
-                  description="Tier settings, payout methods, notifications, and account controls will be built in the next pass."
-                />
-              }
-            />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/ai-bot" element={<AIBotPage />} />
+            <Route path="/artist" element={<ArtistDashboardPage />} />
+            <Route path="/admin" element={<AdminPanelPage />} />
           </Route>
         </Route>
 
-        <Route
-          path="*"
-          element={
-            <Navigate to={isAuthenticated() ? '/' : '/login'} replace />
-          }
-        />
+        <Route path="*" element={<Navigate to={isAuthenticated() ? '/' : '/login'} replace />} />
       </Routes>
     </>
   )

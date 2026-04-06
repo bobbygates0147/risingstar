@@ -402,6 +402,24 @@ export function TopNavbar({
 
               <div className="mt-3 space-y-1.5">
                 <Link
+                  to="/profile"
+                  onClick={() => setAccountOpen(false)}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--glow)]">
+                    <UserRound className="h-4 w-4" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block font-medium text-[var(--text-primary)]">
+                      Profile
+                    </span>
+                    <span className="block text-xs text-[var(--text-tertiary)]">
+                      Account details and tier status
+                    </span>
+                  </span>
+                </Link>
+
+                <Link
                   to="/wallet"
                   onClick={() => setAccountOpen(false)}
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"

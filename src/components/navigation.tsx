@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -11,13 +11,19 @@ import {
   LogOut,
   Menu,
   MoonStar,
+  Shield,
   Sparkles,
   SunMedium,
   UserRound,
   Wallet,
 } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { signOut } from '../lib/auth'
+import { useRewardTasks } from '../hooks/use-reward-tasks'
+import { getAuthenticatedUser, isAdmin, signOut } from '../lib/auth'
+import {
+  isAIBotDisplayActiveForUser,
+} from '../lib/ai-bot-state'
+import { getNextQueuedTask, getReadyTaskCount } from '../lib/task-queue'
 
 type NavigationItem = {
   label: string
@@ -26,13 +32,43 @@ type NavigationItem = {
   mobileLabel: string
 }
 
-const navigationItems: NavigationItem[] = [
+const baseNavigationItems: NavigationItem[] = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard, mobileLabel: 'Home' },
   { label: 'Tasks', href: '/tasks', icon: Headphones, mobileLabel: 'Tasks' },
   { label: 'Wallet', href: '/wallet', icon: Wallet, mobileLabel: 'Wallet' },
   { label: 'Activity', href: '/activity', icon: Activity, mobileLabel: 'Log' },
   { label: 'Profile', href: '/profile', icon: UserRound, mobileLabel: 'Me' },
 ]
+
+const adminNavigationItem: NavigationItem = {
+  label: 'Admin',
+  href: '/admin',
+  icon: Shield,
+  mobileLabel: 'Admin',
+}
+
+function getNavigationItems() {
+  return isAdmin() ? [adminNavigationItem] : baseNavigationItems
+}
+
+function getUserInitials(name: string, email: string) {
+  const source = name.trim().length > 0 ? name.trim() : email.trim()
+
+  if (!source) {
+    return 'RS'
+  }
+
+  const words = source
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase()
+  }
+
+  return source.slice(0, 2).toUpperCase()
+}
 
 type SidebarContentProps = {
   collapsed: boolean
@@ -65,6 +101,32 @@ function BrandMark({ compact }: { compact: boolean }) {
 }
 
 function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
+  const navigationItems = getNavigationItems()
+  const navigate = useNavigate()
+  const adminView = isAdmin()
+  const user = getAuthenticatedUser()
+  const [pulseNowMs, setPulseNowMs] = useState(() => Date.now())
+  const aiBotActive = useMemo(
+    () =>
+      isAIBotDisplayActiveForUser(user, new Date(pulseNowMs)),
+    [pulseNowMs, user],
+  )
+  const botHeading = aiBotActive ? 'Bot is activated' : 'Automate your queue'
+  const botDescription = aiBotActive
+    ? 'Automation is running with periodic checkpoint validation.'
+    : 'Premium automation with periodic validation checkpoints.'
+  const botButtonLabel = aiBotActive ? 'Manage Bot' : 'Activate Pro'
+
+  useEffect(() => {
+    const pulseTimer = window.setInterval(() => {
+      setPulseNowMs(Date.now())
+    }, 30_000)
+
+    return () => {
+      window.clearInterval(pulseTimer)
+    }
+  }, [])
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -118,58 +180,78 @@ function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
         </div>
       </nav>
 
-      <div className="shrink-0 px-2.5 pb-3">
-        <div
-          className={clsx(
-            'surface-glow overflow-hidden rounded-2xl p-3.5',
-            collapsed && 'px-2.5 py-3',
-          )}
-          style={{ backgroundImage: 'var(--gradient-sidebar-card)' }}
-        >
+      {!adminView && (
+        <div className="shrink-0 px-2.5 pb-3">
           <div
             className={clsx(
-              'rounded-[18px] border border-[var(--border-soft)] bg-[var(--surface-overlay)] p-3.5',
-              collapsed && 'p-3',
+              'surface-glow overflow-hidden rounded-2xl p-3.5',
+              collapsed && 'px-2.5 py-3',
             )}
+            style={{ backgroundImage: 'var(--gradient-sidebar-card)' }}
           >
-            <p
+            <div
               className={clsx(
-                'text-[10px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]',
-                collapsed && 'text-center',
+                'rounded-[18px] border border-[var(--border-soft)] bg-[var(--surface-overlay)] p-3.5',
+                collapsed && 'p-3',
               )}
             >
-              {collapsed ? 'BOT' : 'AI bot'}
-            </p>
-            {!collapsed && (
-              <>
-                <p className="mt-2 font-display text-base font-semibold text-[var(--text-primary)]">
-                  Automate your queue
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-                  Premium automation with periodic validation checkpoints.
-                </p>
-                <button
-                  type="button"
-                  className="mt-3 inline-flex h-10 items-center justify-center rounded-xl bg-[var(--button-primary-bg)] px-4 text-sm font-semibold text-[var(--button-primary-text)] transition hover:bg-[var(--button-primary-hover)]"
-                >
-                  Activate Pro
-                </button>
-              </>
-            )}
-            {collapsed && (
-              <div className="mt-3 flex justify-center">
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--button-primary-bg)] text-[var(--button-primary-text)] transition hover:bg-[var(--button-primary-hover)]"
-                  aria-label="Activate AI Bot"
-                >
-                  <Bot className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+              <p
+                className={clsx(
+                  'text-[10px] uppercase tracking-[0.22em] text-[var(--text-tertiary)]',
+                  collapsed && 'text-center',
+                )}
+              >
+                {collapsed ? 'BOT' : 'AI bot'}
+              </p>
+              {!collapsed && (
+                <>
+                  <p className="mt-2 font-display text-base font-semibold text-[var(--text-primary)]">
+                    {botHeading}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                    {botDescription}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/ai-bot')
+                      onItemSelect?.()
+                    }}
+                    className={clsx(
+                      'mt-3 inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition',
+                      aiBotActive
+                        ? 'bot-activated-pulse border-[rgba(167,139,250,0.66)] bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_0_0_1px_rgba(167,139,250,0.42)]'
+                        : 'border-transparent bg-[var(--button-primary-bg)] text-[var(--button-primary-text)] hover:bg-[var(--button-primary-hover)]',
+                    )}
+                  >
+                    {botButtonLabel}
+                  </button>
+                </>
+              )}
+              {collapsed && (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/ai-bot')
+                      onItemSelect?.()
+                    }}
+                    className={clsx(
+                      'inline-flex h-9 w-9 items-center justify-center rounded-xl border transition',
+                      aiBotActive
+                        ? 'bot-activated-pulse border-[rgba(167,139,250,0.66)] bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_0_0_1px_rgba(167,139,250,0.42)]'
+                        : 'border-transparent bg-[var(--button-primary-bg)] text-[var(--button-primary-text)] hover:bg-[var(--button-primary-hover)]',
+                    )}
+                    aria-label="Activate AI Bot"
+                  >
+                    <Bot className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -208,8 +290,8 @@ export function NavigationSidebar({
 
       <aside
         className={clsx(
-          'sidebar-aura surface-grid fixed top-4 bottom-4 left-4 z-50 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-sidebar-mobile)] backdrop-blur-xl transition-transform duration-300 lg:hidden',
-          mobileOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1rem)]',
+          'sidebar-aura surface-grid fixed top-2 bottom-2 left-2 z-50 w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-sidebar-mobile)] backdrop-blur-xl transition-transform duration-300 lg:hidden',
+          mobileOpen ? 'translate-x-0' : '-translate-x-[calc(100%+0.5rem)]',
         )}
       >
         <SidebarContent collapsed={false} onItemSelect={onCloseMobile} />
@@ -242,6 +324,50 @@ export function TopNavbar({
   const [accountOpen, setAccountOpen] = useState(false)
   const accountMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const user = getAuthenticatedUser()
+  const userName = user?.name || 'Rising Star User'
+  const userEmail = user?.email || 'user@risingstar.app'
+  const userTier = user?.tier || (user?.role === 'admin' ? 'Admin' : 'Tier 1')
+  const userBadge = user?.role === 'admin' ? 'Admin' : 'Verified'
+  const userInitials = getUserInitials(userName, userEmail)
+  const isAdminUser = user?.role === 'admin'
+  const [pulseNowMs, setPulseNowMs] = useState(() => Date.now())
+  const { tasks: rewardTasks } = useRewardTasks()
+  const readyTaskCount = useMemo(() => getReadyTaskCount(rewardTasks), [rewardTasks])
+  const hasReadyTasks = readyTaskCount > 0
+  const nextQueuedTask = useMemo(
+    () => getNextQueuedTask(rewardTasks, new Date(pulseNowMs)),
+    [rewardTasks, pulseNowMs],
+  )
+  const showDailyPulseCard = isAdminUser || !hasReadyTasks
+  const aiBotActive = useMemo(
+    () =>
+      isAIBotDisplayActiveForUser(user, new Date(pulseNowMs)),
+    [pulseNowMs, user],
+  )
+  const aiBotButtonText = aiBotActive ? 'Bot Activated' : 'Activate Bot'
+  const dailyPulseText = useMemo(() => {
+    if (isAdminUser) {
+      return 'Admin mode'
+    }
+
+    if (nextQueuedTask) {
+      const label = new Intl.DateTimeFormat('en-NG', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Africa/Lagos',
+      }).format(nextQueuedTask.unlockAt)
+
+      return `Queue opens ${label} WAT`
+    }
+
+    if (readyTaskCount > 0) {
+      return `${readyTaskCount} sessions ready now`
+    }
+
+    return 'Queue completed for today'
+  }, [isAdminUser, nextQueuedTask, readyTaskCount])
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -265,6 +391,16 @@ export function TopNavbar({
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
+  useEffect(() => {
+    const pulseTimer = window.setInterval(() => {
+      setPulseNowMs(Date.now())
+    }, 30_000)
+
+    return () => {
+      window.clearInterval(pulseTimer)
     }
   }, [])
 
@@ -312,21 +448,31 @@ export function TopNavbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <div className="hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-2.5 text-right xl:block">
-            <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-              Daily pulse
-            </p>
-            <p className="mt-1 font-display text-sm font-semibold text-[var(--text-primary)]">
-              Queue opens 07:00 WAT
-            </p>
-          </div>
-          <button
-            type="button"
-            className="hidden h-11 items-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(124,58,237,0.26)] transition hover:brightness-110 sm:inline-flex"
-          >
-            <Bot className="h-4 w-4" />
-            Activate Bot
-          </button>
+          {showDailyPulseCard && (
+            <div className="hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-2.5 text-right xl:block">
+              <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+                Daily pulse
+              </p>
+              <p className="mt-1 font-display text-sm font-semibold text-[var(--text-primary)]">
+                {dailyPulseText}
+              </p>
+            </div>
+          )}
+          {!isAdminUser && (
+            <button
+              type="button"
+              onClick={() => navigate('/ai-bot')}
+              className={clsx(
+                'relative hidden h-11 items-center gap-2 overflow-hidden rounded-2xl border px-4 text-sm font-semibold transition sm:inline-flex',
+                aiBotActive
+                  ? 'bot-activated-pulse border-[rgba(167,139,250,0.72)] bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_0_0_1px_rgba(167,139,250,0.45)]'
+                  : 'border-transparent bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_14px_30px_rgba(124,58,237,0.26)] hover:brightness-110',
+              )}
+            >
+              <Bot className="h-4 w-4" />
+              {aiBotButtonText}
+            </button>
+          )}
           <button
             type="button"
             onClick={onToggleTheme}
@@ -358,7 +504,7 @@ export function TopNavbar({
               aria-label="Open account menu"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--glow)] to-[var(--blue)] text-sm font-semibold text-white">
-                AJ
+                {userInitials}
               </div>
             </button>
 
@@ -373,14 +519,14 @@ export function TopNavbar({
               <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--glow)] to-[var(--blue)] text-base font-semibold text-white">
-                    AJ
+                    {userInitials}
                   </div>
                   <div className="min-w-0">
                     <p className="truncate font-display text-lg font-semibold text-[var(--text-primary)]">
-                      Ayo James
+                      {userName}
                     </p>
                     <p className="truncate text-sm text-[var(--text-secondary)]">
-                      ayo.james@risingstar.app
+                      {userEmail}
                     </p>
                   </div>
                 </div>
@@ -391,69 +537,93 @@ export function TopNavbar({
                       Active tier
                     </p>
                     <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">
-                      Tier 2 Earner
+                      {userTier}
                     </p>
                   </div>
                   <span className="rounded-full bg-[rgba(124,58,237,0.16)] px-3 py-1 text-xs font-medium text-[var(--glow)]">
-                    Verified
+                    {userBadge}
                   </span>
                 </div>
               </div>
 
               <div className="mt-3 space-y-1.5">
-                <Link
-                  to="/profile"
-                  onClick={() => setAccountOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--glow)]">
-                    <UserRound className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-medium text-[var(--text-primary)]">
-                      Profile
-                    </span>
-                    <span className="block text-xs text-[var(--text-tertiary)]">
-                      Account details and tier status
-                    </span>
-                  </span>
-                </Link>
+                {!isAdminUser && (
+                  <>
+                    <Link
+                      to="/profile"
+                      onClick={() => setAccountOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--glow)]">
+                        <UserRound className="h-4 w-4" />
+                      </span>
+                      <span className="flex-1">
+                        <span className="block font-medium text-[var(--text-primary)]">
+                          Profile
+                        </span>
+                        <span className="block text-xs text-[var(--text-tertiary)]">
+                          Account details and tier status
+                        </span>
+                      </span>
+                    </Link>
 
-                <Link
-                  to="/wallet"
-                  onClick={() => setAccountOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--blue)]">
-                    <Wallet className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-medium text-[var(--text-primary)]">
-                      Wallet
-                    </span>
-                    <span className="block text-xs text-[var(--text-tertiary)]">
-                      Deposits, withdrawals and payout history
-                    </span>
-                  </span>
-                </Link>
+                    <Link
+                      to="/wallet"
+                      onClick={() => setAccountOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--blue)]">
+                        <Wallet className="h-4 w-4" />
+                      </span>
+                      <span className="flex-1">
+                        <span className="block font-medium text-[var(--text-primary)]">
+                          Wallet
+                        </span>
+                        <span className="block text-xs text-[var(--text-tertiary)]">
+                          Deposits, withdrawals and payout history
+                        </span>
+                      </span>
+                    </Link>
 
-                <Link
-                  to="/ai-bot"
-                  onClick={() => setAccountOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--glow)]">
-                    <Bot className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-medium text-[var(--text-primary)]">
-                      AI Bot
+                    <Link
+                      to="/ai-bot"
+                      onClick={() => setAccountOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-[var(--glow)]">
+                        <Bot className="h-4 w-4" />
+                      </span>
+                      <span className="flex-1">
+                        <span className="block font-medium text-[var(--text-primary)]">
+                          AI Bot
+                        </span>
+                        <span className="block text-xs text-[var(--text-tertiary)]">
+                          Automation status and usage controls
+                        </span>
+                      </span>
+                    </Link>
+                  </>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    onClick={() => setAccountOpen(false)}
+                    className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-subtle)] text-emerald-300">
+                      <Shield className="h-4 w-4" />
                     </span>
-                    <span className="block text-xs text-[var(--text-tertiary)]">
-                      Automation status and usage controls
+                    <span className="flex-1">
+                      <span className="block font-medium text-[var(--text-primary)]">
+                        Admin Panel
+                      </span>
+                      <span className="block text-xs text-[var(--text-tertiary)]">
+                        Moderation and platform controls
+                      </span>
                     </span>
-                  </span>
-                </Link>
+                  </Link>
+                )}
 
                 <button
                   type="button"
@@ -486,10 +656,17 @@ export function TopNavbar({
 }
 
 export function MobileBottomNav() {
+  const navigationItems = getNavigationItems()
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-4 pb-4 lg:hidden">
       <nav className="pointer-events-auto mx-auto max-w-xl rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-bottomnav)] p-2 shadow-[var(--shadow-popup)] backdrop-blur-xl">
-        <div className="grid grid-cols-5 gap-1">
+        <div
+          className="grid gap-1"
+          style={{
+            gridTemplateColumns: `repeat(${navigationItems.length}, minmax(0, 1fr))`,
+          }}
+        >
           {navigationItems.map(({ href, icon: Icon, mobileLabel }) => (
             <NavLink
               key={href}

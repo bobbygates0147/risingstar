@@ -1,13 +1,27 @@
-import clsx from 'clsx'
+﻿import clsx from 'clsx'
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  Check,
   Copy,
   Disc3,
   Wallet,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { PaginationControls } from '../components/pagination-controls'
+import {
+  getDefaultCryptoWalletInstructions,
+  getWalletAddressByNetwork,
+  type CryptoNetwork,
+} from '../lib/crypto-wallets'
+import {
+  getAuthenticatedUser,
+  getAuthorizedHeaders,
+  refreshAuthenticatedUser,
+} from '../lib/auth'
+import { showToast } from '../lib/toast'
 
 type WalletStatus = 'Completed' | 'Pending' | 'Failed'
 type WalletEntryKind = 'deposit' | 'withdrawal' | 'music'
@@ -20,68 +34,73 @@ type WalletEntry = {
   status: WalletStatus
   timeLabel: string
   kind: WalletEntryKind
-  network?: 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'BTC'
+  network?: CryptoNetwork
 }
 
-const initialWalletEntries: WalletEntry[] = [
-  {
-    id: 'wallet-1',
-    title: 'USDT Deposit',
-    detail: 'From external wallet',
-    amount: 500,
-    status: 'Completed',
-    timeLabel: 'Today, 10:30 AM',
-    kind: 'deposit',
-    network: 'TRC20',
-  },
-  {
-    id: 'wallet-2',
-    title: 'Music Task Earnings',
-    detail: "Listened to 'Blinding Lights' by The Weeknd",
-    amount: 2.5,
-    status: 'Completed',
-    timeLabel: 'Today, 9:45 AM',
-    kind: 'music',
-  },
-  {
-    id: 'wallet-3',
-    title: 'USDT Withdrawal',
-    detail: 'To Binance wallet (****8A2F)',
-    amount: -100,
-    status: 'Pending',
-    timeLabel: 'Yesterday, 3:20 PM',
-    kind: 'withdrawal',
-    network: 'TRC20',
-  },
-  {
-    id: 'wallet-4',
-    title: 'Music Task Earnings',
-    detail: "Listened to 'Stay' by The Kid LAROI",
-    amount: 1.8,
-    status: 'Completed',
-    timeLabel: 'Yesterday, 2:15 PM',
-    kind: 'music',
-  },
-  {
-    id: 'wallet-5',
-    title: 'USDT Withdrawal',
-    detail: 'To external wallet - insufficient balance',
-    amount: -1000,
-    status: 'Failed',
-    timeLabel: 'Yesterday, 11:30 AM',
-    kind: 'withdrawal',
-    network: 'TRC20',
-  },
-  {
-    id: 'wallet-6',
-    title: 'Music Task Earnings',
-    detail: "Listened to 'Heat Waves' by Glass Animals",
-    amount: 3.2,
-    status: 'Completed',
-    timeLabel: '2 days ago',
-    kind: 'music',
-  },
-]
+type WalletSummaryResponse = {
+  wallet?: {
+    balance?: number
+    withdrawable?: number
+    totalDepositedUsd?: number
+    lastDepositAt?: string | null
+  }
+  taskCapacity?: {
+    baseDailyLimit?: number
+    extraTaskSlots?: number
+    dailyLimit?: number
+    usdPerExtraTask?: number
+    maxExtraTaskSlots?: number
+  }
+}
+
+type WalletDepositResponse = {
+  message?: string
+  wallet?: {
+    balance?: number
+    withdrawable?: number
+  }
+  taskCapacity?: {
+    dailyLimit?: number
+    extraTaskSlots?: number
+    usdPerExtraTask?: number
+  }
+  deposit?: {
+    amountUsd?: number
+    network?: string
+    reference?: string
+    note?: string
+    grantedTaskSlots?: number
+  }
+}
+
+type WalletWithdrawResponse = {
+  message?: string
+  wallet?: {
+    balance?: number
+    withdrawable?: number
+  }
+}
+
+type WalletHistoryResponse = {
+  entries?: unknown
+}
+
+type WalletAddressOptionKey =
+  | 'usdt_trc20'
+  | 'usdt_erc20'
+  | 'usdt_bep20'
+  | 'btc'
+  | 'eth'
+  | 'sol'
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL?.toString() || 'http://localhost:4000'
+).replace(/\/$/, '')
+const WALLET_SUMMARY_ENDPOINT = `${API_BASE_URL}/api/wallet/summary`
+const WALLET_HISTORY_ENDPOINT = `${API_BASE_URL}/api/wallet/history`
+const WALLET_DEPOSIT_ENDPOINT = `${API_BASE_URL}/api/wallet/deposit`
+const WALLET_WITHDRAW_ENDPOINT = `${API_BASE_URL}/api/wallet/withdraw`
+const WALLET_UPDATED_EVENT = 'rising-star:wallet-updated'
 
 const usdFormatter = new Intl.NumberFormat('en-US', {
   currency: 'USD',
@@ -139,43 +158,510 @@ function resolveEntryNetwork(entry: WalletEntry) {
 
   const candidates = ['TRC20', 'ERC20', 'BEP20', 'SOL', 'BTC']
   const detail = entry.detail.toUpperCase()
-  return candidates.find((network) => detail.includes(network)) ?? '—'
+  return candidates.find((network) => detail.includes(network)) ?? '--'
+}
+
+function isWalletStatus(value: unknown): value is WalletStatus {
+  return value === 'Completed' || value === 'Pending' || value === 'Failed'
+}
+
+function isWalletEntryKind(value: unknown): value is WalletEntryKind {
+  return value === 'deposit' || value === 'withdrawal' || value === 'music'
+}
+
+function isCryptoNetwork(value: unknown): value is CryptoNetwork {
+  return (
+    value === 'TRC20' ||
+    value === 'ERC20' ||
+    value === 'BEP20' ||
+    value === 'SOL' ||
+    value === 'BTC'
+  )
+}
+
+function toWalletEntries(payload: unknown): WalletEntry[] {
+  if (!Array.isArray(payload)) {
+    return []
+  }
+
+  return payload
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null
+      }
+
+      const source = item as Record<string, unknown>
+
+      if (
+        typeof source.id !== 'string' ||
+        typeof source.title !== 'string' ||
+        typeof source.detail !== 'string' ||
+        typeof source.amount !== 'number' ||
+        typeof source.timeLabel !== 'string' ||
+        !isWalletStatus(source.status) ||
+        !isWalletEntryKind(source.kind)
+      ) {
+        return null
+      }
+
+      const network = isCryptoNetwork(source.network) ? source.network : undefined
+
+      return {
+        id: source.id,
+        title: source.title,
+        detail: source.detail,
+        amount: Number(source.amount),
+        status: source.status,
+        timeLabel: source.timeLabel,
+        kind: source.kind,
+        ...(network ? { network } : {}),
+      } satisfies WalletEntry
+    })
+    .filter((entry): entry is WalletEntry => entry !== null)
 }
 
 export function WalletPage() {
+  const PAGE_SIZE = 5
+  const walletInstructions = getDefaultCryptoWalletInstructions()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeModal, setActiveModal] = useState<'deposit' | 'withdraw' | null>(
     null,
   )
   const [depositStep, setDepositStep] = useState<1 | 2>(1)
-  const [depositNetwork, setDepositNetwork] = useState<
-    '' | 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'BTC'
-  >('')
+  const [depositNetwork, setDepositNetwork] = useState<'' | CryptoNetwork>('')
   const [depositAmount, setDepositAmount] = useState('')
   const [depositReference, setDepositReference] = useState('')
   const [depositNote, setDepositNote] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [withdrawNetwork, setWithdrawNetwork] = useState<
-    '' | 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'BTC'
-  >('')
+  const [withdrawNetwork, setWithdrawNetwork] = useState<'' | CryptoNetwork>('')
   const [withdrawAddress, setWithdrawAddress] = useState('')
   const [withdrawMemo, setWithdrawMemo] = useState('')
-  const [entries, setEntries] = useState<WalletEntry[]>(initialWalletEntries)
+  const [entries, setEntries] = useState<WalletEntry[]>([])
   const [selectedEntry, setSelectedEntry] = useState<WalletEntry | null>(null)
-  const [showAllEntries, setShowAllEntries] = useState(false)
-  const totalBalance = 2847.5
-  const usdtBalance = 2847.5
-  const depositAddress =
-    depositNetwork === 'TRC20'
-      ? 'TQ7QK1v7n3d8S3qE8P4m4K9r2q8p5y6z7a'
-      : depositNetwork === 'ERC20'
-        ? '0x83B2dB6C9aE0f1E5C4a2d5B1a9d4E6f8b9C0d1e2'
-        : depositNetwork === 'BEP20'
-          ? '0x6fC2b1A9D0c3E7f8a2B4c5D6e7F8a9B0c1D2E3f4'
-          : depositNetwork === 'SOL'
-            ? '9p9d6QZ7f2rZQ5m5bS8d5oJpQw4KfVb7mL2cT8yXhV4A'
-            : depositNetwork === 'BTC'
-              ? 'bc1q9xy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
-              : '0x83B2dB6C9aE0f1E5C4a2d5B1a9d4E6f8b9C0d1e2'
+  const [entriesPage, setEntriesPage] = useState(1)
+  const [selectedWalletAddressKey, setSelectedWalletAddressKey] =
+    useState<WalletAddressOptionKey>('usdt_trc20')
+  const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+  const [qrLoadError, setQrLoadError] = useState(false)
+  const authenticatedUser = getAuthenticatedUser()
+  const [totalBalance, setTotalBalance] = useState(
+    Number(authenticatedUser?.walletBalance || 0),
+  )
+  const [usdtBalance, setUsdtBalance] = useState(
+    Number(authenticatedUser?.walletBalance || 0),
+  )
+  const [taskCapacityHint, setTaskCapacityHint] = useState('')
+  const [depositSubmitting, setDepositSubmitting] = useState(false)
+  const [depositError, setDepositError] = useState('')
+  const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
+  const [withdrawError, setWithdrawError] = useState('')
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const depositAddress = getWalletAddressByNetwork(
+    depositNetwork || 'ERC20',
+    walletInstructions,
+  )
+  const entriesPageCount = Math.max(1, Math.ceil(entries.length / PAGE_SIZE))
+  const walletAddressOptions = useMemo(
+    () => [
+      {
+        key: 'usdt_trc20' as const,
+        label: 'USDT (TRC20)',
+        address: walletInstructions.usdtTrc20Address,
+      },
+      {
+        key: 'usdt_erc20' as const,
+        label: 'USDT (ERC20)',
+        address: walletInstructions.usdtErc20Address,
+      },
+      {
+        key: 'usdt_bep20' as const,
+        label: 'USDT (BEP20)',
+        address: walletInstructions.usdtBep20Address,
+      },
+      { key: 'btc' as const, label: 'BTC', address: walletInstructions.btcAddress },
+      { key: 'eth' as const, label: 'ETH', address: walletInstructions.ethAddress },
+      { key: 'sol' as const, label: 'SOL', address: walletInstructions.solAddress },
+    ],
+    [walletInstructions],
+  )
+  const selectedWalletAddressOption = useMemo(() => {
+    return (
+      walletAddressOptions.find((option) => option.key === selectedWalletAddressKey) ||
+      walletAddressOptions[0]
+    )
+  }, [selectedWalletAddressKey, walletAddressOptions])
+  const qrPayload = useMemo(() => {
+    if (!selectedWalletAddressOption || !activeModal) {
+      return ''
+    }
+
+    const modeLabel = activeModal === 'deposit' ? 'Deposit' : 'Withdraw'
+    const amountValue = Number(
+      activeModal === 'deposit' ? depositAmount : withdrawAmount,
+    )
+    const amountLine =
+      Number.isFinite(amountValue) && amountValue > 0
+        ? `Amount USDT: ${amountValue.toFixed(2)}`
+        : null
+
+    return [
+      `Rising Star Wallet ${modeLabel}`,
+      amountLine,
+      `Network: ${selectedWalletAddressOption.label}`,
+      `Address: ${selectedWalletAddressOption.address}`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }, [activeModal, depositAmount, selectedWalletAddressOption, withdrawAmount])
+  const qrImageUrl = useMemo(() => {
+    if (!qrPayload) {
+      return ''
+    }
+
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(qrPayload)}`
+  }, [qrPayload])
+
+  useEffect(() => {
+    setEntriesPage((current) => Math.min(current, entriesPageCount))
+  }, [entriesPageCount])
+
+  useEffect(() => {
+    setQrLoadError(false)
+  }, [qrImageUrl])
+
+  useEffect(() => {
+    setCopyState('idle')
+  }, [selectedWalletAddressKey])
+
+  const loadWalletSummary = useCallback(async () => {
+    try {
+      const response = await fetch(WALLET_SUMMARY_ENDPOINT, {
+        headers: {
+          ...getAuthorizedHeaders(),
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Wallet summary request failed')
+      }
+
+      const data = (await response.json()) as WalletSummaryResponse
+      const nextBalance = Number(data.wallet?.balance || 0)
+      setTotalBalance(nextBalance)
+      setUsdtBalance(nextBalance)
+
+      const usdPerExtraTask = Number(data.taskCapacity?.usdPerExtraTask || 0)
+      const extraTaskSlots = Number(data.taskCapacity?.extraTaskSlots || 0)
+      const dailyLimit = Number(data.taskCapacity?.dailyLimit || 0)
+      const baseDailyLimit = Number(data.taskCapacity?.baseDailyLimit || 0)
+
+      if (usdPerExtraTask > 0) {
+        const unlockedByDeposit = Math.max(0, dailyLimit - baseDailyLimit)
+        setTaskCapacityHint(
+          `+1 daily task per ${usdFormatter.format(usdPerExtraTask)} deposited. Bonus unlocked: ${Math.max(
+            unlockedByDeposit,
+            extraTaskSlots,
+          )}.`,
+        )
+      } else {
+        setTaskCapacityHint('')
+      }
+    } catch {
+      const fallbackBalance = Number(getAuthenticatedUser()?.walletBalance || 0)
+      setTotalBalance(fallbackBalance)
+      setUsdtBalance(fallbackBalance)
+    }
+  }, [])
+
+  const loadWalletHistory = useCallback(async () => {
+    try {
+      setHistoryLoading(true)
+
+      const response = await fetch(WALLET_HISTORY_ENDPOINT, {
+        headers: {
+          ...getAuthorizedHeaders(),
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Wallet history request failed')
+      }
+
+      const data = (await response.json()) as WalletHistoryResponse
+      setEntries(toWalletEntries(data.entries))
+      setEntriesPage(1)
+    } catch {
+      setEntries([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadWalletSummary()
+    void loadWalletHistory()
+  }, [loadWalletHistory, loadWalletSummary])
+
+  useEffect(() => {
+    function handleWalletUpdated() {
+      void loadWalletSummary()
+      void loadWalletHistory()
+    }
+
+    window.addEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated)
+
+    return () => {
+      window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated)
+    }
+  }, [loadWalletHistory, loadWalletSummary])
+
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (entriesPage - 1) * PAGE_SIZE
+    return entries.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [entries, entriesPage])
+
+  async function handleCopyWalletAddress() {
+    if (!selectedWalletAddressOption) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedWalletAddressOption.address)
+      setCopyState('copied')
+      window.setTimeout(() => setCopyState('idle'), 1400)
+    } catch {
+      setCopyState('idle')
+    }
+  }
+
+  function openDepositModal() {
+    setActiveModal('deposit')
+    setDepositStep(1)
+    setDepositError('')
+    setDepositNetwork('')
+    setDepositAmount('')
+    setDepositReference('')
+    setDepositNote('')
+  }
+
+  function openWithdrawModal() {
+    setActiveModal('withdraw')
+    setDepositStep(1)
+    setWithdrawError('')
+    setWithdrawAmount('')
+    setWithdrawNetwork('')
+    setWithdrawAddress('')
+    setWithdrawMemo('')
+  }
+
+  async function handleDepositSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setDepositError('')
+
+    if (depositStep === 1) {
+      setDepositStep(2)
+      return
+    }
+
+    const amountValue = Number(depositAmount)
+    const referenceValue = depositReference.trim()
+    const noteValue = depositNote.trim()
+
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setDepositError('Enter a valid deposit amount.')
+      return
+    }
+
+    if (!depositNetwork) {
+      setDepositError('Select a funding network.')
+      return
+    }
+
+    if (referenceValue.length < 3) {
+      setDepositError('Enter a valid payment reference.')
+      return
+    }
+
+    setDepositSubmitting(true)
+
+    try {
+      const response = await fetch(WALLET_DEPOSIT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthorizedHeaders(),
+        },
+        body: JSON.stringify({
+          amountUsd: Number(amountValue.toFixed(2)),
+          network: depositNetwork,
+          reference: referenceValue,
+          note: noteValue,
+        }),
+      })
+
+      const data = (await response.json().catch(() => ({}))) as WalletDepositResponse
+
+      if (!response.ok) {
+        const message =
+          typeof data.message === 'string'
+            ? data.message
+            : 'Unable to process deposit right now'
+        throw new Error(message)
+      }
+
+      const nextBalance = Number(data.wallet?.balance || 0)
+      setTotalBalance(nextBalance)
+      setUsdtBalance(nextBalance)
+
+      if (typeof data.taskCapacity?.usdPerExtraTask === 'number') {
+        const bonusSlots = Number(data.taskCapacity.extraTaskSlots || 0)
+        setTaskCapacityHint(
+          `+1 daily task per ${usdFormatter.format(
+            data.taskCapacity.usdPerExtraTask,
+          )} deposited. Bonus unlocked: ${bonusSlots}.`,
+        )
+      }
+
+      await refreshAuthenticatedUser()
+      await loadWalletHistory()
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT))
+      }
+
+      showToast({
+        title:
+          typeof data.message === 'string' && data.message.trim().length > 0
+            ? data.message
+            : 'Deposit completed successfully.',
+        variant: 'success',
+      })
+
+      setActiveModal(null)
+      setDepositStep(1)
+      setDepositNetwork('')
+      setDepositAmount('')
+      setDepositReference('')
+      setDepositNote('')
+      setDepositError('')
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to process deposit right now'
+      setDepositError(message)
+      showToast({
+        title: message,
+        variant: 'error',
+      })
+    } finally {
+      setDepositSubmitting(false)
+    }
+  }
+
+  async function handleWithdrawSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setWithdrawError('')
+
+    const amountValue = Number(withdrawAmount)
+    const networkValue = withdrawNetwork
+    const walletAddressValue = withdrawAddress.trim()
+    const memoValue = withdrawMemo.trim()
+
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      setWithdrawError('Enter a valid withdrawal amount.')
+      return
+    }
+
+    if (!networkValue) {
+      setWithdrawError('Select a funding network.')
+      return
+    }
+
+    if (walletAddressValue.length < 10) {
+      setWithdrawError('Enter a valid destination wallet address.')
+      return
+    }
+
+    setWithdrawSubmitting(true)
+
+    try {
+      const response = await fetch(WALLET_WITHDRAW_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthorizedHeaders(),
+        },
+        body: JSON.stringify({
+          amountUsd: Number(amountValue.toFixed(2)),
+          network: networkValue,
+          walletAddress: walletAddressValue,
+          memo: memoValue,
+        }),
+      })
+
+      const data = (await response.json().catch(() => ({}))) as WalletWithdrawResponse
+
+      if (!response.ok) {
+        const message =
+          typeof data.message === 'string'
+            ? data.message
+            : 'Unable to submit withdrawal right now'
+        throw new Error(message)
+      }
+
+      await loadWalletHistory()
+      await loadWalletSummary()
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT))
+      }
+
+      showToast({
+        title:
+          typeof data.message === 'string' && data.message.trim().length > 0
+            ? data.message
+            : 'Withdrawal request submitted.',
+        variant: 'success',
+      })
+
+      setActiveModal(null)
+      setWithdrawAmount('')
+      setWithdrawNetwork('')
+      setWithdrawAddress('')
+      setWithdrawMemo('')
+      setWithdrawError('')
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to submit withdrawal right now'
+      setWithdrawError(message)
+      showToast({
+        title: message,
+        variant: 'error',
+      })
+    } finally {
+      setWithdrawSubmitting(false)
+    }
+  }
+
+  useEffect(() => {
+    const requestedModal = searchParams.get('modal')
+    if (!requestedModal) {
+      return
+    }
+
+    if (requestedModal === 'deposit') {
+      openDepositModal()
+    }
+
+    if (requestedModal === 'withdraw') {
+      openWithdrawModal()
+    }
+
+    if (requestedModal === 'deposit' || requestedModal === 'withdraw') {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('modal')
+      setSearchParams(nextParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   return (
     <div className="space-y-6">
@@ -204,7 +690,7 @@ export function WalletPage() {
             </div>
 
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-              Last updated: 2 minutes ago
+              Live sync
             </p>
           </div>
 
@@ -213,21 +699,19 @@ export function WalletPage() {
               {usdFormatter.format(totalBalance)}
             </p>
             <p className="mt-2 text-sm text-emerald-200">
-              ≈ {usdFormatter.format(usdtBalance)} USDT
+              ~= {usdFormatter.format(usdtBalance)} USDT
             </p>
+            {taskCapacityHint && (
+              <p className="mt-3 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                {taskCapacityHint}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => {
-                setActiveModal('deposit')
-                setDepositStep(1)
-                setDepositNetwork('')
-                setDepositAmount('')
-                setDepositReference('')
-                setDepositNote('')
-              }}
+              onClick={openDepositModal}
               className="inline-flex h-11 w-full items-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110 sm:w-auto"
             >
               <ArrowDownLeft className="h-4 w-4" />
@@ -235,14 +719,7 @@ export function WalletPage() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setActiveModal('withdraw')
-                setDepositStep(1)
-                setWithdrawAmount('')
-                setWithdrawNetwork('')
-                setWithdrawAddress('')
-                setWithdrawMemo('')
-              }}
+              onClick={openWithdrawModal}
               className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-panel)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-hover)] sm:w-auto"
             >
               <ArrowUpRight className="h-4 w-4" />
@@ -262,17 +739,23 @@ export function WalletPage() {
               History overview
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAllEntries((current) => !current)}
-            className="inline-flex h-10 w-full items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] sm:w-auto"
-          >
-            {showAllEntries ? 'Show less' : 'View all'}
-          </button>
+          <p className="text-sm text-[var(--text-secondary)]">
+            {entries.length} total
+          </p>
         </div>
 
         <div className="mt-6 space-y-4">
-          {(showAllEntries ? entries : entries.slice(0, 4)).map((entry) => {
+          {historyLoading && (
+            <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
+              Loading transaction history...
+            </div>
+          )}
+          {!historyLoading && entries.length === 0 && (
+            <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
+              No transactions yet.
+            </div>
+          )}
+          {paginatedEntries.map((entry) => {
             const Icon = entryIcon(entry.kind)
 
             return (
@@ -326,6 +809,12 @@ export function WalletPage() {
             )
           })}
         </div>
+        <PaginationControls
+          itemLabel="transactions"
+          onPageChange={setEntriesPage}
+          page={entriesPage}
+          totalItems={entries.length}
+        />
       </section>
 
       {(activeModal || selectedEntry) && (
@@ -447,54 +936,83 @@ export function WalletPage() {
               </button>
             </div>
 
+            {activeModal === 'deposit' && (
+              <div className="mt-5 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4">
+                <label className="block text-sm text-[var(--text-secondary)]">
+                  Crypto address
+                  <select
+                    value={selectedWalletAddressKey}
+                    onChange={(event) =>
+                      setSelectedWalletAddressKey(
+                        event.target.value as WalletAddressOptionKey,
+                      )
+                    }
+                    className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 text-sm font-medium text-[var(--text-primary)] outline-none transition focus:border-[var(--border-strong)]"
+                  >
+                    {walletAddressOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {selectedWalletAddressOption && (
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                        Wallet address
+                      </p>
+                      <p className="mt-2 break-all text-sm font-medium text-[var(--text-primary)]">
+                        {selectedWalletAddressOption.address}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex h-9 items-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                          {selectedWalletAddressOption.label}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyWalletAddress}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                        >
+                          {copyState === 'copied' ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                          {copyState === 'copied' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] p-3">
+                      <div className="mx-auto w-fit rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-2">
+                        {!qrLoadError && qrImageUrl ? (
+                          <img
+                            src={qrImageUrl}
+                            alt={`Scan QR barcode for ${selectedWalletAddressOption.label}`}
+                            className="h-32 w-32 rounded-lg object-cover"
+                            onError={() => setQrLoadError(true)}
+                          />
+                        ) : (
+                          <div className="flex h-32 w-32 items-center justify-center rounded-lg border border-dashed border-[var(--border-soft)] text-center text-[11px] text-[var(--text-tertiary)]">
+                            QR unavailable
+                          </div>
+                        )}
+                      </div>
+                      <p className="mt-2 text-center text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                        Scan to pay
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeModal === 'deposit' ? (
               <form
                 className="mt-6 space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (depositStep === 1) {
-                    setDepositStep(2)
-                    return
-                  }
-
-                  const amountValue = Number(depositAmount)
-                  if (!Number.isFinite(amountValue) || amountValue <= 0) {
-                    return
-                  }
-
-                  const networkLabel = depositNetwork || 'Network'
-                  const referenceLabel = depositReference.trim()
-                  const noteLabel = depositNote.trim()
-                  const detailParts = [`${networkLabel} deposit`]
-
-                  if (referenceLabel) {
-                    detailParts.push(referenceLabel)
-                  }
-                  if (noteLabel) {
-                    detailParts.push(noteLabel)
-                  }
-
-                  setEntries((current) => [
-                    {
-                      id: `wallet-${Date.now()}`,
-                      title: 'USDT Deposit',
-                      detail: detailParts.join(' • '),
-                      amount: amountValue,
-                      status: 'Pending',
-                      timeLabel: 'Just now',
-                      kind: 'deposit',
-                      network: depositNetwork || undefined,
-                    },
-                    ...current,
-                  ])
-
-                  setActiveModal(null)
-                  setDepositStep(1)
-                  setDepositNetwork('')
-                  setDepositAmount('')
-                  setDepositReference('')
-                  setDepositNote('')
-                }}
+                onSubmit={handleDepositSubmit}
               >
                 {depositStep === 1 ? (
                   <>
@@ -519,13 +1037,7 @@ export function WalletPage() {
                         value={depositNetwork}
                         onChange={(event) =>
                           setDepositNetwork(
-                            event.target.value as
-                              | ''
-                              | 'TRC20'
-                              | 'ERC20'
-                              | 'BEP20'
-                              | 'SOL'
-                              | 'BTC',
+                            event.target.value as '' | CryptoNetwork,
                           )
                         }
                         className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--border-strong)]"
@@ -569,6 +1081,13 @@ export function WalletPage() {
                           type="button"
                           className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-primary)] transition hover:border-[var(--border-strong)]"
                           aria-label="Copy deposit address"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(depositAddress)
+                            } catch {
+                              // Ignore clipboard permission issues in embedded browsers.
+                            }
+                          }}
                         >
                           <Copy className="h-4 w-4" />
                         </button>
@@ -576,10 +1095,9 @@ export function WalletPage() {
                     </div>
 
                     <label className="block text-sm text-[var(--text-secondary)]">
-                      Upload proof of payment
+                      Upload proof of payment (optional)
                       <input
                         type="file"
-                        required
                         accept="image/*,.pdf"
                         className="mt-2 w-full rounded-2xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-sm text-[var(--text-secondary)] file:mr-4 file:rounded-full file:border-0 file:bg-[rgba(124,58,237,0.18)] file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.18em] file:text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
                       />
@@ -598,6 +1116,12 @@ export function WalletPage() {
                   </>
                 )}
 
+                {depositError && (
+                  <p className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    {depositError}
+                  </p>
+                )}
+
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                   <button
                     type="button"
@@ -612,49 +1136,26 @@ export function WalletPage() {
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110"
+                    disabled={depositSubmitting}
+                    className={clsx(
+                      'inline-flex h-11 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition',
+                      depositSubmitting
+                        ? 'cursor-wait opacity-80'
+                        : 'hover:brightness-110',
+                    )}
                   >
-                    {depositStep === 1 ? 'Continue' : 'Submit deposit'}
+                    {depositSubmitting
+                      ? 'Submitting...'
+                      : depositStep === 1
+                        ? 'Continue'
+                        : 'Submit deposit'}
                   </button>
                 </div>
               </form>
             ) : (
               <form
                 className="mt-6 space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  const amountValue = Number(withdrawAmount)
-                  if (!Number.isFinite(amountValue) || amountValue <= 0) {
-                    return
-                  }
-
-                  const networkLabel = withdrawNetwork || 'Network'
-                  const detailParts = [`${networkLabel} withdrawal`, `To ${withdrawAddress.trim()}`]
-                  const memoValue = withdrawMemo.trim()
-
-                  if (memoValue) {
-                    detailParts.push(memoValue)
-                  }
-
-                  setEntries((current) => [
-                    {
-                      id: `wallet-${Date.now()}`,
-                      title: 'USDT Withdrawal',
-                      detail: detailParts.join(' • '),
-                      amount: -Math.abs(amountValue),
-                      status: 'Pending',
-                      timeLabel: 'Just now',
-                      kind: 'withdrawal',
-                      network: withdrawNetwork || undefined,
-                    },
-                    ...current,
-                  ])
-
-                  setActiveModal(null)
-                  setWithdrawAmount('')
-                  setWithdrawAddress('')
-                  setWithdrawMemo('')
-                }}
+                onSubmit={handleWithdrawSubmit}
               >
                 <label className="block text-sm text-[var(--text-secondary)]">
                   Amount (USDT)
@@ -677,13 +1178,7 @@ export function WalletPage() {
                     value={withdrawNetwork}
                     onChange={(event) =>
                       setWithdrawNetwork(
-                        event.target.value as
-                          | ''
-                          | 'TRC20'
-                          | 'ERC20'
-                          | 'BEP20'
-                          | 'SOL'
-                          | 'BTC',
+                        event.target.value as '' | CryptoNetwork,
                       )
                     }
                     className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--border-strong)]"
@@ -724,6 +1219,12 @@ export function WalletPage() {
                   />
                 </label>
 
+                {withdrawError && (
+                  <p className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    {withdrawError}
+                  </p>
+                )}
+
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                   <button
                     type="button"
@@ -734,9 +1235,13 @@ export function WalletPage() {
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110"
+                    disabled={withdrawSubmitting}
+                    className={clsx(
+                      'inline-flex h-11 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition',
+                      withdrawSubmitting ? 'cursor-wait opacity-80' : 'hover:brightness-110',
+                    )}
                   >
-                    Confirm withdrawal
+                    {withdrawSubmitting ? 'Submitting...' : 'Confirm withdrawal'}
                   </button>
                 </div>
                 </form>
@@ -748,3 +1253,5 @@ export function WalletPage() {
     </div>
   )
 }
+
+

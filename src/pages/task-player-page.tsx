@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import type { LucideIcon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -11,12 +12,14 @@ import {
   Play,
   Sparkles,
 } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
-import { rewardTasks, type TaskStatus, type TaskType } from '../data/platform-data'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { TaskCoverImage } from '../components/task-cover-image'
+import { AD_VIDEO_ASSETS } from '../data/ad-video-catalog'
+import { MUSIC_AUDIO_ASSETS } from '../data/music-audio-catalog'
+import { type TaskType } from '../data/platform-data'
+import { useRewardTasks } from '../hooks/use-reward-tasks'
 import { formatUsd } from '../lib/format'
-
-const AD_VIDEO_SOURCE =
-  'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4'
+import { showToast } from '../lib/toast'
 
 type TaskPlayerConfig = {
   heading: string
@@ -46,9 +49,10 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
   },
   Ads: {
     heading: 'Sponsored Ad Task',
-    subtitle: 'Watch the sponsor clip from start to finish with active focus.',
-    actionHint: 'Sponsor session',
-    actionLabel: 'Play full ad video',
+    subtitle:
+      'Using image placeholder mode until your real ad clips are uploaded.',
+    actionHint: 'Dummy sponsor session',
+    actionLabel: 'Preview placeholder ad',
     mode: 'video',
     icon: Clapperboard,
     badgeClassName:
@@ -56,9 +60,9 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
     ctaClassName:
       'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-[0_20px_45px_rgba(251,146,60,0.35)]',
     rules: [
-      'Do not skip the ad video',
-      'Keep this tab active until complete',
-      'Sound must remain enabled',
+      'Ad clip is currently a placeholder image',
+      'Real playback checks will be enabled later',
+      'Use this task as layout and flow preview',
     ],
   },
   Art: {
@@ -80,6 +84,8 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
   },
 }
 
+const MEDIA_END_COMPLETION_THRESHOLD_SECONDS = 2
+
 function parseDurationToSeconds(duration: string) {
   const [minutesRaw, secondsRaw] = duration.split(':')
   const minutes = Number(minutesRaw)
@@ -100,23 +106,456 @@ function formatDuration(totalSeconds: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-function getSessionProgress(status: TaskStatus) {
-  if (status === 'completed') {
-    return 100
+function normalizeMediaSource(value: string) {
+  if (!value.startsWith('/')) {
+    return value
   }
 
-  if (status === 'live') {
-    return 64
+  try {
+    return encodeURI(decodeURI(value))
+  } catch {
+    return value
+  }
+}
+
+function buildMediaCandidates(primary: string, catalog: readonly string[]) {
+  const candidates: string[] = []
+  const seen = new Set<string>()
+
+  function pushCandidate(value: string) {
+    const normalized = normalizeMediaSource(value.trim())
+    if (!normalized || seen.has(normalized)) {
+      return
+    }
+
+    seen.add(normalized)
+    candidates.push(normalized)
   }
 
-  return 0
+  if (primary.trim().length > 0) {
+    pushCandidate(primary)
+  }
+
+  catalog.forEach((entry) => pushCandidate(entry))
+  return candidates
 }
 
 export function TaskPlayerPage() {
+  const {
+    tasks: rewardTasks,
+    isLoading,
+    completeTask,
+    recordTaskOpen,
+  } = useRewardTasks()
+  const navigate = useNavigate()
   const { taskId } = useParams()
   const task = rewardTasks.find((candidate) => candidate.id === taskId)
+  const musicRef = useRef<HTMLAudioElement | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const completionNotifiedRef = useRef(false)
+  const shouldAutoReturnRef = useRef(false)
+  const resumeAfterUnmuteRef = useRef(false)
+  const openedSessionRef = useRef<string | null>(null)
+  const config = task ? taskPlayerConfig[task.type] : null
+  const totalSeconds = task ? parseDurationToSeconds(task.duration) : 0
+  const taskSessionId = task?.id ?? ''
+  const taskStatus = task?.status ?? ''
+  const taskDuration = task?.duration ?? ''
+  const taskTitle = task?.title ?? ''
+  const taskReward = Number(task?.reward ?? 0)
+  const [remainingSeconds, setRemainingSeconds] = useState(0)
+  const [hasStarted, setHasStarted] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
+  const [likedArtwork, setLikedArtwork] = useState(false)
+  const [muteBlocked, setMuteBlocked] = useState(false)
+  const [visibilityBlocked, setVisibilityBlocked] = useState(false)
+  const [musicMediaIndex, setMusicMediaIndex] = useState(0)
+  const [musicMediaExhausted, setMusicMediaExhausted] = useState(false)
+  const [adMediaIndex, setAdMediaIndex] = useState(0)
+  const [adMediaExhausted, setAdMediaExhausted] = useState(false)
+  const isTimeLocked = Boolean(task?.isTimeLocked)
+  const isCompleted = task?.status === 'completed'
+  const elapsedSeconds = Math.max(totalSeconds - remainingSeconds, 0)
+  const completionPercent = isCompleted
+    ? 100
+    : totalSeconds > 0
+      ? Math.min(Math.round((elapsedSeconds / totalSeconds) * 100), 100)
+      : 0
+  const sessionLabel =
+    isCompleted
+      ? 'Completed'
+      : isTimeLocked
+        ? 'Scheduled'
+        : hasStarted
+          ? 'In progress'
+          : 'Ready'
+  const isMusicSession = config?.mode === 'music'
+  const isVideoSession = config?.mode === 'video'
+  const isLikeSession = config?.mode === 'like'
+  const isArtLikeVerifying =
+    isLikeSession &&
+    likedArtwork &&
+    hasStarted &&
+    !isCompleted &&
+    remainingSeconds > 0
+  const mediaUrl = task?.mediaUrl
+  const normalizedMediaUrl = typeof mediaUrl === 'string' ? normalizeMediaSource(mediaUrl) : ''
 
-  if (!task) {
+  const musicMediaCandidates = useMemo(() => {
+    if (task?.type !== 'Music') {
+      return []
+    }
+
+    return buildMediaCandidates(normalizedMediaUrl, MUSIC_AUDIO_ASSETS)
+  }, [normalizedMediaUrl, task?.type])
+
+  const adMediaCandidates = useMemo(() => {
+    if (task?.type !== 'Ads') {
+      return []
+    }
+
+    return buildMediaCandidates(normalizedMediaUrl, AD_VIDEO_ASSETS)
+  }, [normalizedMediaUrl, task?.type])
+
+  const currentMusicUrl =
+    musicMediaExhausted || musicMediaCandidates.length === 0
+      ? ''
+      : musicMediaCandidates[Math.min(musicMediaIndex, musicMediaCandidates.length - 1)] || ''
+  const currentAdVideoUrl =
+    adMediaExhausted || adMediaCandidates.length === 0
+      ? ''
+      : adMediaCandidates[Math.min(adMediaIndex, adMediaCandidates.length - 1)] || ''
+
+  const hasMusicMedia = currentMusicUrl.length > 0
+  const hasAdVideo = currentAdVideoUrl.length > 0
+  const canPlayAdVideo = hasAdVideo
+  const requiresMediaValidation =
+    (isMusicSession && hasMusicMedia) || (isVideoSession && canPlayAdVideo)
+  const validationBlocked = muteBlocked || visibilityBlocked
+  const validationBlockMessage = visibilityBlocked
+    ? 'Return to this tab to continue validation.'
+    : muteBlocked
+      ? 'Audio is muted. Unmute playback to continue validation.'
+      : ''
+  const sessionSubtitle =
+    !task || !config
+      ? ''
+      : task.type === 'Ads'
+      ? canPlayAdVideo
+        ? 'Watch the sponsor clip from start to finish with active focus.'
+        : 'Using image placeholder mode until ad clips are ready.'
+      : task.type === 'Music'
+        ? hasMusicMedia
+          ? 'Press play and keep audio running until timer reaches zero.'
+          : 'No audio media found for this session yet.'
+      : config.subtitle
+  const actionHint =
+    isTimeLocked
+      ? 'Scheduled unlock'
+      : task?.type === 'Ads'
+      ? canPlayAdVideo
+        ? 'Sponsor session'
+        : 'Dummy sponsor session'
+      : config?.actionHint || 'Active session'
+  const actionLabel =
+    isTimeLocked
+      ? `Opens ${task?.unlockLabel || 'later today'}`
+      : task?.type === 'Ads'
+      ? canPlayAdVideo
+        ? 'Play full ad video'
+        : 'Preview placeholder ad'
+      : task?.type === 'Music'
+        ? 'Play music and stay active'
+      : config?.actionLabel || 'Start session'
+  const taskRules =
+    task?.type === 'Ads' && canPlayAdVideo
+      ? [
+          'Do not skip the ad video',
+          'Keep this tab active until complete',
+          'Sound should remain enabled',
+        ]
+      : task?.type === 'Music' && hasMusicMedia
+        ? [
+            'Keep audio playing until timer completes',
+            'Do not mute the tab during validation',
+            'Stay on this screen for full payout eligibility',
+          ]
+        : config?.rules || []
+
+  function isMediaMuted(mediaElement: HTMLMediaElement) {
+    return mediaElement.muted || mediaElement.volume <= 0.001
+  }
+
+  function updateMuteValidation(mediaElement: HTMLMediaElement) {
+    if (isTimeLocked || isCompleted || !requiresMediaValidation) {
+      resumeAfterUnmuteRef.current = false
+      return false
+    }
+
+    const muted = isMediaMuted(mediaElement)
+    setMuteBlocked(muted)
+
+    if (muted) {
+      setIsRunning(false)
+      resumeAfterUnmuteRef.current = true
+      if (!mediaElement.paused) {
+        mediaElement.pause()
+      }
+      return true
+    }
+
+    if (resumeAfterUnmuteRef.current && !visibilityBlocked) {
+      resumeAfterUnmuteRef.current = false
+      void mediaElement
+        .play()
+        .then(() => {
+          setHasStarted(true)
+          setIsRunning(true)
+        })
+        .catch(() => {
+          setIsRunning(false)
+        })
+      return false
+    }
+
+    if (!mediaElement.paused && !visibilityBlocked) {
+      setHasStarted(true)
+      setIsRunning(true)
+    }
+
+    return muted
+  }
+
+  function continueCountdownAfterMediaEnd() {
+    if (isTimeLocked || isCompleted) {
+      return
+    }
+
+    setHasStarted(true)
+    setRemainingSeconds((current) =>
+      current <= MEDIA_END_COMPLETION_THRESHOLD_SECONDS ? 0 : current,
+    )
+    // Keep the interval alive so near-end drift does not freeze at 0:01.
+    setIsRunning(true)
+  }
+
+  function handleMediaPause(mediaElement: HTMLMediaElement) {
+    if (isTimeLocked || isCompleted) {
+      return
+    }
+
+    const hasFiniteDuration =
+      Number.isFinite(mediaElement.duration) && mediaElement.duration > 0
+    const isNaturalEndPause =
+      mediaElement.ended ||
+      (hasFiniteDuration &&
+        mediaElement.currentTime >= mediaElement.duration - 0.35)
+
+    if (isNaturalEndPause) {
+      continueCountdownAfterMediaEnd()
+      return
+    }
+
+    setIsRunning(false)
+  }
+
+  function startSession() {
+    if (!task) {
+      return
+    }
+
+    if (isTimeLocked || isCompleted) {
+      return
+    }
+
+    setHasStarted(true)
+
+    if (isLikeSession) {
+      setIsRunning(likedArtwork)
+      return
+    }
+
+    if (isMusicSession && musicRef.current) {
+      void musicRef.current.play().catch(() => {
+        setIsRunning(false)
+      })
+      return
+    }
+
+    if (isVideoSession && videoRef.current) {
+      void videoRef.current.play().catch(() => {
+        setIsRunning(false)
+      })
+      return
+    }
+
+    setIsRunning(true)
+  }
+
+  useEffect(() => {
+    if (!taskSessionId) {
+      return
+    }
+
+    completionNotifiedRef.current = false
+    resumeAfterUnmuteRef.current = false
+    const nextTotalSeconds = parseDurationToSeconds(taskDuration)
+    const resetTimer = window.setTimeout(() => {
+      setMusicMediaIndex(0)
+      setMusicMediaExhausted(false)
+      setAdMediaIndex(0)
+      setAdMediaExhausted(false)
+      setRemainingSeconds(taskStatus === 'completed' ? 0 : nextTotalSeconds)
+      setHasStarted(taskStatus === 'completed')
+      setIsRunning(false)
+      setLikedArtwork(taskStatus === 'completed')
+      setMuteBlocked(false)
+      setVisibilityBlocked(false)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(resetTimer)
+    }
+  }, [taskDuration, taskSessionId, taskStatus])
+
+  useEffect(() => {
+    if (!taskSessionId) {
+      return
+    }
+
+    if (openedSessionRef.current === taskSessionId) {
+      return
+    }
+
+    openedSessionRef.current = taskSessionId
+    recordTaskOpen(taskSessionId)
+  }, [recordTaskOpen, taskSessionId])
+
+  useEffect(() => {
+    if (!hasStarted || !requiresMediaValidation || isTimeLocked || isCompleted) {
+      return
+    }
+
+    function handleVisibilityValidation() {
+      const hidden =
+        typeof document !== 'undefined' && document.visibilityState !== 'visible'
+      setVisibilityBlocked(hidden)
+
+      if (!hidden) {
+        return
+      }
+
+      setIsRunning(false)
+      musicRef.current?.pause()
+      videoRef.current?.pause()
+    }
+
+    handleVisibilityValidation()
+    document.addEventListener('visibilitychange', handleVisibilityValidation)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityValidation)
+    }
+  }, [hasStarted, isCompleted, isTimeLocked, requiresMediaValidation])
+
+  useEffect(() => {
+    if (!taskSessionId || !hasStarted || !isRunning || isCompleted || isTimeLocked) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      setRemainingSeconds((current) => {
+        if (current <= 1) {
+          return 0
+        }
+
+        return current - 1
+      })
+    }, 1000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [taskSessionId, hasStarted, isRunning, isCompleted, isTimeLocked])
+
+  useEffect(() => {
+    if (
+      !taskSessionId ||
+      !hasStarted ||
+      isCompleted ||
+      isTimeLocked ||
+      remainingSeconds > 0 ||
+      completionNotifiedRef.current
+    ) {
+      return
+    }
+
+    if (isLikeSession && !likedArtwork) {
+      return
+    }
+
+    completionNotifiedRef.current = true
+    shouldAutoReturnRef.current = true
+    showToast({
+      variant: 'success',
+      title: `${formatUsd(taskReward)} credited`,
+      description: `${taskTitle} is complete. Reward posted to your balance.`,
+    })
+    completeTask(taskSessionId)
+  }, [
+    completeTask,
+    hasStarted,
+    isCompleted,
+    isLikeSession,
+    isTimeLocked,
+    likedArtwork,
+    remainingSeconds,
+    taskReward,
+    taskSessionId,
+    taskTitle,
+  ])
+
+  useEffect(() => {
+    if (!taskSessionId || !isCompleted || !shouldAutoReturnRef.current) {
+      return
+    }
+
+    shouldAutoReturnRef.current = false
+    const redirectTimer = window.setTimeout(() => {
+      navigate('/tasks', { replace: true })
+    }, 450)
+
+    return () => {
+      window.clearTimeout(redirectTimer)
+    }
+  }, [isCompleted, navigate, taskSessionId])
+
+  useEffect(() => {
+    if (!isCompleted) {
+      return
+    }
+
+    musicRef.current?.pause()
+    videoRef.current?.pause()
+  }, [isCompleted])
+
+  if (isLoading && !task) {
+    return (
+      <section className="mx-auto max-w-3xl rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-8 text-center shadow-[var(--shadow-panel)]">
+        <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
+          Task player
+        </p>
+        <h2 className="mt-3 font-display text-3xl font-semibold text-[var(--text-primary)]">
+          Loading session
+        </h2>
+        <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[var(--text-secondary)]">
+          Fetching the latest task data from backend.
+        </p>
+      </section>
+    )
+  }
+
+  if (!task || !config) {
     return (
       <section className="mx-auto max-w-3xl rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-8 text-center shadow-[var(--shadow-panel)]">
         <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
@@ -140,24 +579,10 @@ export function TaskPlayerPage() {
     )
   }
 
-  const config = taskPlayerConfig[task.type]
   const TaskIcon = config.icon
-  const completionPercent = getSessionProgress(task.status)
-  const totalSeconds = parseDurationToSeconds(task.duration)
-  const elapsedSeconds = Math.round((completionPercent / 100) * totalSeconds)
-  const remainingSeconds = Math.max(totalSeconds - elapsedSeconds, 0)
-  const sessionLabel =
-    task.status === 'completed'
-      ? 'Completed'
-      : task.status === 'live'
-        ? 'In progress'
-        : 'Ready'
-  const isMusicSession = config.mode === 'music'
-  const isVideoSession = config.mode === 'video'
-  const isLikeSession = config.mode === 'like'
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div key={task.id} className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           to="/tasks"
@@ -196,7 +621,7 @@ export function TaskPlayerPage() {
           {isVideoSession && (
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[rgba(251,191,36,0.35)] bg-[rgba(251,191,36,0.16)] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.15em] text-amber-200">
               <Clapperboard className="h-3.5 w-3.5" />
-              Video playback required
+              {hasAdVideo ? 'Video playback required' : 'Dummy media mode'}
             </div>
           )}
           {isLikeSession && (
@@ -209,8 +634,18 @@ export function TaskPlayerPage() {
             {config.heading}
           </p>
           <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            {config.subtitle}
+            {sessionSubtitle}
           </p>
+          {isTimeLocked && (
+            <div className="mt-4 w-full rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-left">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-200">
+                Scheduled session
+              </p>
+              <p className="mt-1 text-sm text-amber-100/90">
+                This task unlocks at {task.unlockLabel || 'later today'}.
+              </p>
+            </div>
+          )}
 
           <div className="mt-6 w-full overflow-hidden rounded-[30px] border border-[var(--border-soft)] shadow-[0_24px_60px_rgba(2,6,23,0.45)]">
             <div
@@ -220,20 +655,75 @@ export function TaskPlayerPage() {
               )}
             >
               {isVideoSession ? (
-                <video
-                  className="h-full w-full object-cover"
-                  controls
-                  controlsList="nodownload noplaybackrate"
-                  playsInline
-                  poster={task.coverImage}
-                  preload="metadata"
-                >
-                  <source src={AD_VIDEO_SOURCE} type="video/mp4" />
-                </video>
+                canPlayAdVideo && !isTimeLocked ? (
+                  <video
+                    key={`${task.id}-${currentAdVideoUrl}`}
+                    ref={videoRef}
+                    className="h-full w-full object-cover"
+                    controls
+                    controlsList="nodownload noplaybackrate"
+                    playsInline
+                    poster={task.coverImage}
+                    preload="metadata"
+                    src={currentAdVideoUrl}
+                    onPlay={(event) => {
+                      if (isTimeLocked || isCompleted) {
+                        return
+                      }
+
+                      if (updateMuteValidation(event.currentTarget)) {
+                        event.currentTarget.pause()
+                        return
+                      }
+
+                      setVisibilityBlocked(false)
+                      setHasStarted(true)
+                      setIsRunning(true)
+                    }}
+                    onPause={(event) => {
+                      handleMediaPause(event.currentTarget)
+                    }}
+                    onEnded={() => {
+                      continueCountdownAfterMediaEnd()
+                    }}
+                    onVolumeChange={(event) => {
+                      updateMuteValidation(event.currentTarget)
+                    }}
+                    onError={() => {
+                      setIsRunning(false)
+                      setAdMediaIndex((current) => {
+                        const next = current + 1
+                        if (next < adMediaCandidates.length) {
+                          return next
+                        }
+                        setAdMediaExhausted(true)
+                        return current
+                      })
+                    }}
+                  />
+                ) : (
+                  <>
+                    <TaskCoverImage
+                      key={`${task.id}-${task.coverImage}`}
+                      src={task.coverImage}
+                      type={task.type}
+                      alt={`${task.title} cover`}
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/16 to-black/8" />
+                    <div className="absolute bottom-16 right-4 rounded-xl border border-white/20 bg-black/35 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">
+                      {isTimeLocked
+                        ? `Unlocks ${task.unlockLabel || 'later'}`
+                        : 'Dummy ad image'}
+                    </div>
+                  </>
+                )
               ) : (
                 <>
-                  <img
+                  <TaskCoverImage
+                    key={`${task.id}-${task.coverImage}`}
                     src={task.coverImage}
+                    type={task.type}
                     alt={`${task.title} cover`}
                     className="h-full w-full object-cover"
                   />
@@ -248,8 +738,10 @@ export function TaskPlayerPage() {
                 <span
                   className={clsx(
                     'rounded-full border px-3 py-1 text-[11px] font-medium backdrop-blur-sm',
-                    task.status === 'completed'
+                    isCompleted
                       ? 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200'
+                      : isTimeLocked
+                        ? 'border-amber-300/25 bg-amber-400/15 text-amber-100'
                       : task.status === 'live'
                         ? 'border-sky-400/25 bg-sky-400/15 text-sky-100'
                         : 'border-white/20 bg-black/30 text-white/90',
@@ -267,6 +759,62 @@ export function TaskPlayerPage() {
             </div>
           </div>
 
+          {isMusicSession && (
+            <div className="mt-4 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 py-3 text-left">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
+                Music playback
+              </p>
+              {hasMusicMedia ? (
+                <audio
+                  key={`${task.id}-${currentMusicUrl}`}
+                  ref={musicRef}
+                  className="mt-3 w-full"
+                  controls
+                  preload="metadata"
+                  src={currentMusicUrl}
+                  onPlay={(event) => {
+                    if (isTimeLocked || isCompleted) {
+                      return
+                    }
+
+                    if (updateMuteValidation(event.currentTarget)) {
+                      event.currentTarget.pause()
+                      return
+                    }
+
+                    setVisibilityBlocked(false)
+                    setHasStarted(true)
+                    setIsRunning(true)
+                  }}
+                  onPause={(event) => {
+                    handleMediaPause(event.currentTarget)
+                  }}
+                  onEnded={() => {
+                    continueCountdownAfterMediaEnd()
+                  }}
+                  onVolumeChange={(event) => {
+                    updateMuteValidation(event.currentTarget)
+                  }}
+                  onError={() => {
+                    setIsRunning(false)
+                    setMusicMediaIndex((current) => {
+                      const next = current + 1
+                      if (next < musicMediaCandidates.length) {
+                        return next
+                      }
+                      setMusicMediaExhausted(true)
+                      return current
+                    })
+                  }}
+                />
+              ) : (
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  Audio file is not available for this session yet.
+                </p>
+              )}
+            </div>
+          )}
+
           <h2 className="mt-6 font-display text-[2rem] font-semibold tracking-tight text-[var(--text-primary)] sm:text-[2.35rem]">
             {task.title}
           </h2>
@@ -278,43 +826,81 @@ export function TaskPlayerPage() {
                 Video validation
               </p>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Play the ad from start to finish. Seeking, tab switches, or muted
-                playback can invalidate reward eligibility.
+                {isTimeLocked
+                  ? `This sponsor task is locked until ${task.unlockLabel || 'later today'}.`
+                  : canPlayAdVideo
+                  ? 'Play the ad from start to finish. Seeking, tab switches, or muted playback can invalidate reward eligibility.'
+                  : 'Real ad clips are not connected yet. This is currently image-only preview mode for task UI and rewards flow.'}
+              </p>
+            </div>
+          ) : isMusicSession ? (
+            <div className="mt-6 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 py-3 text-left">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
+                Audio validation
+              </p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Keep playback active until the timer reaches zero to validate this session.
               </p>
             </div>
           ) : isLikeSession ? (
             <div className="mt-6 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] p-3">
               <button
                 type="button"
+                disabled={isTimeLocked || isCompleted || likedArtwork}
+                onClick={() => {
+                  if (isTimeLocked || isCompleted) {
+                    return
+                  }
+
+                  setLikedArtwork(true)
+                  setHasStarted(true)
+                  setIsRunning(true)
+                }}
                 className={clsx(
-                  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition hover:brightness-110',
+                  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70',
                   config.ctaClassName,
                 )}
                 aria-label={config.actionLabel}
               >
                 <Heart className="h-4 w-4" />
-                Like Artwork
+                {likedArtwork ? 'Artwork Liked' : 'Like Artwork'}
               </button>
+              {isArtLikeVerifying && (
+                <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--glow)] border-t-transparent" />
+                  Verifying like action
+                  <span className="font-semibold text-[var(--text-primary)]">
+                    {formatDuration(remainingSeconds)}
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <button
               type="button"
+              disabled={isTimeLocked || isCompleted}
+              onClick={startSession}
               className={clsx(
-                'task-player-ring mt-6 inline-flex h-20 w-20 items-center justify-center rounded-full transition hover:scale-[1.03]',
+                'task-player-ring mt-6 inline-flex h-20 w-20 items-center justify-center rounded-full transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-70',
                 config.ctaClassName,
               )}
-              aria-label={config.actionLabel}
+              aria-label={actionLabel}
             >
               <Play className="h-8 w-8" />
             </button>
           )}
 
           <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-            {config.actionHint}
+            {actionHint}
           </p>
           <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">
-            {config.actionLabel}
+            {actionLabel}
           </p>
+          {validationBlocked && (
+            <div className="mt-4 w-full rounded-2xl border border-rose-300/25 bg-rose-400/10 px-4 py-3 text-left text-sm text-rose-100">
+              {validationBlockMessage}
+            </div>
+          )}
 
           {isMusicSession && (
             <div className="task-player-bars mt-5 flex h-8 items-end gap-1.5">
@@ -371,7 +957,7 @@ export function TaskPlayerPage() {
               Task Rules
             </h3>
             <ul className="mt-4 space-y-3">
-              {config.rules.map((rule) => (
+              {taskRules.map((rule) => (
                 <li
                   key={rule}
                   className="flex items-start gap-3 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2.5 text-sm text-[var(--text-secondary)]"

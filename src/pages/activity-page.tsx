@@ -9,158 +9,20 @@ import {
   Palette,
   Target,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { PaginationControls } from '../components/pagination-controls'
+import {
+  type ActivityLogEntry,
+  type ActivityLogFilter,
+  type ActivityLogKind,
+  useActivityLog,
+} from '../hooks/use-activity-log'
 
-type ActivityFilter = 'All' | 'Earnings' | 'Tasks' | 'Withdrawals'
-type ActivityCategory = Exclude<ActivityFilter, 'All'>
-type ActivityKind =
-  | 'music'
-  | 'ads'
-  | 'art'
-  | 'milestone'
-  | 'bonus'
-  | 'withdrawal'
-  | 'deposit'
-
-type ActivityLogEntry = {
-  id: string
-  amount: number
-  category: ActivityCategory
-  dateLabel: string
-  detail: string
-  kind: ActivityKind
-  timeLabel: string
-  title: string
-}
-
-const activityFilters: ActivityFilter[] = [
+const activityFilters: ActivityLogFilter[] = [
   'All',
   'Earnings',
   'Tasks',
   'Withdrawals',
-]
-
-const activityEntries: ActivityLogEntry[] = [
-  {
-    id: 'activity-1',
-    title: "Completed 'Blinding Lights'",
-    detail: 'The Weeknd • Music listening task',
-    amount: 2.5,
-    category: 'Tasks',
-    dateLabel: 'Today',
-    timeLabel: '2 hours ago',
-    kind: 'music',
-  },
-  {
-    id: 'activity-2',
-    title: 'Earning milestone reached',
-    detail: '$50 daily target achieved',
-    amount: 5,
-    category: 'Earnings',
-    dateLabel: 'Today',
-    timeLabel: '3 hours ago',
-    kind: 'milestone',
-  },
-  {
-    id: 'activity-3',
-    title: "Completed 'Stay'",
-    detail: 'The Kid LAROI, Justin Bieber • Music listening task',
-    amount: 1.8,
-    category: 'Tasks',
-    dateLabel: 'Today',
-    timeLabel: '5 hours ago',
-    kind: 'music',
-  },
-  {
-    id: 'activity-4',
-    title: 'Withdrawal processed',
-    detail: 'Bank transfer to ****4521',
-    amount: -100,
-    category: 'Withdrawals',
-    dateLabel: 'Yesterday',
-    timeLabel: 'April 5, 2026',
-    kind: 'withdrawal',
-  },
-  {
-    id: 'activity-5',
-    title: 'Premium tier bonus',
-    detail: 'Daily premium member bonus earned',
-    amount: 5,
-    category: 'Earnings',
-    dateLabel: 'Yesterday',
-    timeLabel: 'April 5, 2026',
-    kind: 'bonus',
-  },
-  {
-    id: 'activity-6',
-    title: "Completed 'Heat Waves'",
-    detail: 'Glass Animals • Music listening task',
-    amount: 3.2,
-    category: 'Tasks',
-    dateLabel: 'Yesterday',
-    timeLabel: 'April 5, 2026',
-    kind: 'music',
-  },
-  {
-    id: 'activity-7',
-    title: "Completed 'Good 4 U'",
-    detail: 'Olivia Rodrigo • Music listening task',
-    amount: 2.1,
-    category: 'Tasks',
-    dateLabel: 'Yesterday',
-    timeLabel: 'April 5, 2026',
-    kind: 'music',
-  },
-  {
-    id: 'activity-8',
-    title: "Completed 'Anti-Hero'",
-    detail: 'Taylor Swift • Music listening task',
-    amount: 2.8,
-    category: 'Tasks',
-    dateLabel: 'April 4, 2026',
-    timeLabel: 'April 4, 2026',
-    kind: 'music',
-  },
-  {
-    id: 'activity-9',
-    title: "Completed 'As It Was'",
-    detail: 'Harry Styles • Music listening task',
-    amount: 2.4,
-    category: 'Tasks',
-    dateLabel: 'April 4, 2026',
-    timeLabel: 'April 4, 2026',
-    kind: 'music',
-  },
-  {
-    id: 'activity-10',
-    title: 'Art engagement complete',
-    detail: 'Museum Glow • Like verified',
-    amount: 1.3,
-    category: 'Tasks',
-    dateLabel: 'April 4, 2026',
-    timeLabel: 'April 4, 2026',
-    kind: 'art',
-  },
-  {
-    id: 'activity-11',
-    title: 'Sponsored clip watched',
-    detail: 'City Lights Ad • Playback verified',
-    amount: 1.1,
-    category: 'Tasks',
-    dateLabel: 'April 4, 2026',
-    timeLabel: 'April 4, 2026',
-    kind: 'ads',
-  },
-  {
-    id: 'activity-12',
-    title: 'Wallet top-up settled',
-    detail: 'USDT deposit cleared to your wallet',
-    amount: 50,
-    category: 'Earnings',
-    dateLabel: 'April 3, 2026',
-    timeLabel: 'April 3, 2026',
-    kind: 'deposit',
-  },
 ]
 
 const signedUsdFormatter = new Intl.NumberFormat('en-US', {
@@ -188,7 +50,7 @@ type ActivityVisualConfig = {
   iconClassName: string
 }
 
-function getActivityVisual(kind: ActivityKind): ActivityVisualConfig {
+function getActivityVisual(kind: ActivityLogKind): ActivityVisualConfig {
   if (kind === 'music') {
     return {
       icon: Disc3,
@@ -238,22 +100,32 @@ function getActivityVisual(kind: ActivityKind): ActivityVisualConfig {
 }
 
 export function ActivityPage() {
-  const [activeFilter, setActiveFilter] = useState<ActivityFilter>('All')
-  const [visibleCount, setVisibleCount] = useState(9)
+  const PAGE_SIZE = 5
+  const { entries: activityEntries, isLoading } = useActivityLog()
+  const [activeFilter, setActiveFilter] = useState<ActivityLogFilter>('All')
+  const [activityPage, setActivityPage] = useState(1)
 
   const filteredEntries = useMemo(() => {
     return activeFilter === 'All'
       ? activityEntries
       : activityEntries.filter((entry) => entry.category === activeFilter)
-  }, [activeFilter])
+  }, [activeFilter, activityEntries])
 
-  const visibleEntries = filteredEntries.slice(0, visibleCount)
-  const hasMoreEntries = visibleEntries.length < filteredEntries.length
+  const activityPageCount = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setActivityPage((current) => Math.min(current, activityPageCount))
+  }, [activityPageCount])
+
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (activityPage - 1) * PAGE_SIZE
+    return filteredEntries.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [activityPage, filteredEntries])
 
   const groupedEntries = useMemo(() => {
     const groups = new Map<string, ActivityLogEntry[]>()
 
-    visibleEntries.forEach((entry) => {
+    paginatedEntries.forEach((entry) => {
       const existingGroup = groups.get(entry.dateLabel)
       if (existingGroup) {
         existingGroup.push(entry)
@@ -263,7 +135,7 @@ export function ActivityPage() {
     })
 
     return Array.from(groups.entries())
-  }, [visibleEntries])
+  }, [paginatedEntries])
 
   const todayNet = activityEntries
     .filter((entry) => entry.dateLabel === 'Today')
@@ -340,7 +212,7 @@ export function ActivityPage() {
                 type="button"
                 onClick={() => {
                   setActiveFilter(filter)
-                  setVisibleCount(9)
+                  setActivityPage(1)
                 }}
                 className={clsx(
                   'inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium transition',
@@ -359,7 +231,19 @@ export function ActivityPage() {
           </p>
         </div>
 
+        {isLoading && (
+          <p className="mt-4 text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+            Syncing activity log
+          </p>
+        )}
+
         <div className="mt-6 space-y-6">
+          {groupedEntries.length === 0 && (
+            <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
+              No activity yet. Complete a task to generate your first activity event.
+            </div>
+          )}
+
           {groupedEntries.map(([dateLabel, entries]) => (
             <div key={dateLabel}>
               <h3 className="text-lg font-semibold text-[var(--text-primary)]">
@@ -414,15 +298,13 @@ export function ActivityPage() {
           ))}
         </div>
 
-        {hasMoreEntries && (
-          <button
-            type="button"
-            onClick={() => setVisibleCount((current) => current + 6)}
-            className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
-          >
-            Load More Activities
-          </button>
-        )}
+        <PaginationControls
+          className="mt-6"
+          itemLabel="activities"
+          onPageChange={setActivityPage}
+          page={activityPage}
+          totalItems={filteredEntries.length}
+        />
       </section>
     </div>
   )

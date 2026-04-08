@@ -8,44 +8,119 @@ import {
   Radio,
   Sparkles,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rewardTasks, type TaskType } from '../data/platform-data'
+import { PaginationControls } from '../components/pagination-controls'
+import { TaskCoverImage } from '../components/task-cover-image'
+import { type TaskType } from '../data/platform-data'
+import { useRewardTasks } from '../hooks/use-reward-tasks'
+import { canAccessAdTasks, getAuthenticatedUser } from '../lib/auth'
+import {
+  getAIBotLocalState,
+  isAIBotAutomationActiveForUser,
+} from '../lib/ai-bot-state'
 import { formatUsd } from '../lib/format'
+import { getNextQueuedTask, getProjectedReward } from '../lib/task-queue'
 
 type TaskFilter = 'All' | TaskType | 'Completed'
 
-const taskFilters: TaskFilter[] = ['All', 'Music', 'Ads', 'Art', 'Completed']
-
 export function TasksPage() {
+  const PAGE_SIZE = 8
   const [activeFilter, setActiveFilter] = useState<TaskFilter>('All')
+  const [taskPage, setTaskPage] = useState(1)
+  const [aiPulseNowMs, setAiPulseNowMs] = useState(() => Date.now())
+  const { tasks: rewardTasks, isLoading } = useRewardTasks()
+  const currentUser = getAuthenticatedUser()
+  const adsUnlocked = canAccessAdTasks(currentUser)
+  const aiBotLocalState = useMemo(
+    () => getAIBotLocalState(new Date(aiPulseNowMs)),
+    [aiPulseNowMs, currentUser?.email, currentUser?.id],
+  )
+  const aiBotAutomating = useMemo(
+    () => isAIBotAutomationActiveForUser(currentUser, new Date(aiPulseNowMs)),
+    [aiPulseNowMs, currentUser],
+  )
+  const aiBotPurchased =
+    Boolean(currentUser?.aiBotEnabled) || Boolean(aiBotLocalState.activatedAt)
+  const aiBotSummary = aiBotAutomating
+    ? 'Auto mode is active and processing unlocked tasks.'
+    : aiBotPurchased && aiBotLocalState.checkpointRequired
+      ? 'Checkpoint required. Complete validation to resume automation.'
+      : aiBotPurchased
+        ? 'Automation enabled with manual checkpoints.'
+        : 'Available with manual checkpoints'
+  const aiBotActionLabel = aiBotAutomating
+    ? 'Manage AI Bot'
+    : aiBotPurchased
+      ? 'Resume AI Bot'
+      : 'Open AI Bot'
 
-  const filteredTasks = rewardTasks.filter((task) => {
-    if (activeFilter === 'All') {
-      return true
+  const taskFilters: TaskFilter[] = adsUnlocked
+    ? ['All', 'Music', 'Ads', 'Art', 'Completed']
+    : ['All', 'Music', 'Art', 'Completed']
+  const selectedFilter = taskFilters.includes(activeFilter) ? activeFilter : 'All'
+
+  const filteredTasks = useMemo(() => {
+    return rewardTasks.filter((task) => {
+      if (selectedFilter === 'All') {
+        return true
+      }
+
+      if (selectedFilter === 'Completed') {
+        return task.status === 'completed'
+      }
+
+      return task.type === selectedFilter
+    })
+  }, [rewardTasks, selectedFilter])
+
+  const taskPageCount = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setTaskPage(1)
+  }, [selectedFilter])
+
+  useEffect(() => {
+    setTaskPage((current) => Math.min(current, taskPageCount))
+  }, [taskPageCount])
+
+  useEffect(() => {
+    const pulseTimer = window.setInterval(() => {
+      setAiPulseNowMs(Date.now())
+    }, 30_000)
+
+    return () => {
+      window.clearInterval(pulseTimer)
     }
+  }, [])
 
-    if (activeFilter === 'Completed') {
-      return task.status === 'completed'
-    }
-
-    return task.type === activeFilter
-  })
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (taskPage - 1) * PAGE_SIZE
+    return filteredTasks.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [filteredTasks, taskPage])
 
   const completedCount = rewardTasks.filter(
     (task) => task.status === 'completed',
   ).length
 
-  const liveCount = rewardTasks.filter((task) => task.status !== 'completed')
-    .length
-
-  const artQueueCount = rewardTasks.filter(
-    (task) => task.type === 'Art' && task.status !== 'completed',
+  const liveCount = rewardTasks.filter(
+    (task) => task.status !== 'completed' && !task.isTimeLocked,
   ).length
 
-  const projectedReward = rewardTasks
-    .filter((task) => task.status !== 'completed')
-    .reduce((total, task) => total + task.reward, 0)
+  const queuedLaterCount = rewardTasks.filter(
+    (task) => task.status !== 'completed' && task.isTimeLocked,
+  ).length
+
+  const projectedReward = getProjectedReward(rewardTasks)
+  const nextQueuedTask = useMemo(() => getNextQueuedTask(rewardTasks), [rewardTasks])
+  const projectedRewardDetail = nextQueuedTask
+    ? `Next queue unlock ${nextQueuedTask.unlockAt.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+      })} - ${nextQueuedTask.task.type} session`
+    : liveCount > 0
+      ? `${liveCount} sessions ready right now.`
+      : 'Queue completed for today.'
 
   return (
     <div className="space-y-6">
@@ -63,10 +138,15 @@ export function TasksPage() {
                 Music listens, art likes, and sponsored clips in one queue
               </h2>
               <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
-                Filter by music, art, ads, or completed jobs. Each task keeps
-                its own reward amount, timer, and validation state so the
-                payout remains traceable.
+                Daily tasks are capped by tier and released in scattered time
+                slots through the day. Each account gets a shuffled sequence,
+                while task assets can rotate in loops.
               </p>
+              {!adsUnlocked && (
+                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-amber-200">
+                  Tier 2 unlocks sponsored ad tasks.
+                </p>
+              )}
             </div>
 
             <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-overlay)] px-4 py-3 text-sm text-[var(--text-secondary)]">
@@ -74,8 +154,14 @@ export function TasksPage() {
                 Bot assist
               </p>
               <p className="mt-2 font-medium text-[var(--text-primary)]">
-                Available with manual checkpoints
+                {aiBotSummary}
               </p>
+              <Link
+                to="/ai-bot"
+                className="mt-3 inline-flex text-xs font-semibold uppercase tracking-[0.14em] text-[var(--glow)] transition hover:text-[var(--text-primary)]"
+              >
+                {aiBotActionLabel}
+              </Link>
             </div>
           </div>
         </div>
@@ -87,8 +173,16 @@ export function TasksPage() {
           <p className="mt-3 font-display text-4xl font-semibold text-[var(--text-primary)]">
             {formatUsd(projectedReward)}
           </p>
+          {isLoading && (
+            <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+              Syncing task data
+            </p>
+          )}
           <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-            Current open queue if you clear every available task before reset.
+            If you clear all today&apos;s sessions as each slot unlocks.
+          </p>
+          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+            {projectedRewardDetail}
           </p>
         </div>
       </section>
@@ -117,12 +211,12 @@ export function TasksPage() {
         <div className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-5">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[var(--text-secondary)]">
-              Art queue
+              Opens later
             </p>
             <Palette className="h-5 w-5 text-[var(--blue)]" />
           </div>
           <p className="mt-4 font-display text-3xl font-semibold text-[var(--text-primary)]">
-            {artQueueCount}
+            {queuedLaterCount}
           </p>
         </div>
       </section>
@@ -145,7 +239,7 @@ export function TasksPage() {
                 onClick={() => setActiveFilter(filter)}
                 className={clsx(
                   'inline-flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition',
-                  activeFilter === filter
+                  selectedFilter === filter
                     ? 'border-[var(--border-strong)] bg-[rgba(124,58,237,0.16)] text-[var(--text-primary)]'
                     : 'border-[var(--border-soft)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]',
                 )}
@@ -158,14 +252,25 @@ export function TasksPage() {
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filteredTasks.map((task) => {
+          {filteredTasks.length === 0 && (
+            <div className="col-span-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]">
+              No {selectedFilter === 'All' ? '' : `${selectedFilter.toLowerCase()} `}
+              tasks available in this queue right now.
+            </div>
+          )}
+
+          {paginatedTasks.map((task) => {
             const isCompleted = task.status === 'completed'
+            const isLockedByTime = Boolean(task.isTimeLocked)
+            const isLocked = isCompleted || isLockedByTime
             const isArtTask = task.type === 'Art'
             const actionLabel = isCompleted
               ? 'Completed'
-              : task.status === 'live'
-                ? 'Resume Task'
-                : 'Start Task'
+              : isLockedByTime
+                ? `Opens ${task.unlockLabel || 'later'}`
+                : task.status === 'live'
+                  ? 'Resume Task'
+                  : 'Start Task'
             const taskPlayerPath = `/tasks/${task.id}`
 
             return (
@@ -176,8 +281,9 @@ export function TasksPage() {
                 <div
                   className="relative aspect-[4/3] overflow-hidden rounded-[22px]"
                 >
-                  <img
+                  <TaskCoverImage
                     src={task.coverImage}
+                    type={task.type}
                     alt={`${task.title} cover art`}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
                   />
@@ -191,6 +297,8 @@ export function TasksPage() {
                         'rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur-sm',
                         isCompleted
                           ? 'border border-emerald-400/20 bg-emerald-400/15 text-emerald-200'
+                          : isLockedByTime
+                            ? 'border border-amber-300/25 bg-amber-300/15 text-amber-200'
                           : task.status === 'live'
                             ? 'border border-sky-400/20 bg-sky-400/15 text-sky-100'
                             : 'border border-white/20 bg-black/25 text-white/90',
@@ -198,6 +306,8 @@ export function TasksPage() {
                     >
                       {isCompleted
                         ? 'Completed'
+                        : isLockedByTime
+                          ? 'Scheduled'
                         : task.status === 'live'
                           ? 'In progress'
                           : 'Ready'}
@@ -253,7 +363,7 @@ export function TasksPage() {
                   <span>{task.engagement} engagement</span>
                 </div>
 
-                {isCompleted ? (
+                {isLocked ? (
                   <button
                     type="button"
                     disabled
@@ -275,6 +385,13 @@ export function TasksPage() {
             )
           })}
         </div>
+        <PaginationControls
+          itemLabel="tasks"
+          onPageChange={setTaskPage}
+          page={taskPage}
+          pageSize={PAGE_SIZE}
+          totalItems={filteredTasks.length}
+        />
       </section>
     </div>
   )

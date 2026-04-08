@@ -74,12 +74,28 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const activePage = resolvePageMeta(location.pathname)
+  const desktopSidebarOffsetClass = sidebarCollapsed
+    ? 'lg:left-[6.5rem]'
+    : 'lg:left-[16.75rem]'
+  const desktopContentOffsetClass = sidebarCollapsed
+    ? 'lg:pl-[6.5rem]'
+    : 'lg:pl-[16.75rem]'
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     document.documentElement.style.colorScheme = theme
     window.localStorage.setItem('rising-star-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    const closeTimer = window.setTimeout(() => {
+      setMobileOpen(false)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(closeTimer)
+    }
+  }, [location.pathname])
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
@@ -97,14 +113,14 @@ export function AppShell() {
 
       <div
         className={clsx(
-          'relative min-h-screen transition-[padding] duration-300 lg:pr-4',
-          sidebarCollapsed ? 'lg:pl-[7rem]' : 'lg:pl-[17.25rem]',
+          'relative min-h-screen transition-[padding-left] duration-300 lg:pr-4',
+          desktopContentOffsetClass,
         )}
       >
         <div
           className={clsx(
-            'fixed inset-x-0 top-0 z-40 px-0 sm:px-6 lg:top-3 lg:right-3 lg:px-0',
-            sidebarCollapsed ? 'lg:left-[6.5rem]' : 'lg:left-[16.75rem]',
+            'fixed inset-x-0 top-0 z-40 px-0 transition-[left] duration-300 sm:px-6 lg:top-3 lg:right-3 lg:px-0',
+            desktopSidebarOffsetClass,
           )}
         >
           <TopNavbar

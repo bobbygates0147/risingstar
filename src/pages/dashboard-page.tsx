@@ -1,4 +1,6 @@
+import clsx from 'clsx'
 import {
+  ArrowDownLeft,
   ArrowUpRight,
   Bot,
   Clapperboard,
@@ -11,18 +13,21 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { PaginationControls } from '../components/pagination-controls'
+import { TaskCoverImage } from '../components/task-cover-image'
+import { type TaskType } from '../data/platform-data'
+import { useDashboardData } from '../hooks/use-dashboard-data'
+import { useRewardTasks } from '../hooks/use-reward-tasks'
+import { getAuthenticatedUser } from '../lib/auth'
 import {
-  activityFeed,
-  dashboardSummary,
-  rewardTasks,
-  type TaskType,
-} from '../data/platform-data'
-import { formatCompactUsd, formatUsd } from '../lib/format'
-
-const previewTasks = rewardTasks
-  .filter((task) => task.status !== 'completed')
-  .slice(0, 4)
+  getAIBotLocalState,
+  isAIBotAutomationActiveForUser,
+  isAIBotDisplayActiveForUser,
+} from '../lib/ai-bot-state'
+import { formatUsd } from '../lib/format'
+import { getNextQueuedTask, getReadyTaskCount } from '../lib/task-queue'
 
 function getPreviewActionLabel(taskType: TaskType) {
   if (taskType === 'Ads') {
@@ -49,10 +54,91 @@ function getPreviewActionIcon(taskType: TaskType) {
 }
 
 export function DashboardPage() {
+  const PAGE_SIZE = 5
+  const navigate = useNavigate()
+  const { tasks: rewardTasks } = useRewardTasks()
+  const { summary: dashboardSummary, activity: activityFeed } = useDashboardData()
+  const [activityPage, setActivityPage] = useState(1)
+  const [aiPulseNowMs, setAiPulseNowMs] = useState(() => Date.now())
+  const currentUser = getAuthenticatedUser()
+  const hasWithdrawableBalance = dashboardSummary.withdrawable > 0
+
+  const readyTasks = rewardTasks.filter(
+    (task) => task.status !== 'completed' && !task.isTimeLocked,
+  )
+  const previewTasks =
+    (readyTasks.length > 0
+      ? readyTasks
+      : rewardTasks.filter((task) => task.status !== 'completed')
+    ).slice(0, 4)
+  const activeQueueCount = useMemo(() => getReadyTaskCount(rewardTasks), [rewardTasks])
+  const nextScheduledTask = useMemo(() => getNextQueuedTask(rewardTasks), [rewardTasks])
+
+  const scheduleText = nextScheduledTask
+    ? `Task schedule: next unlock ${nextScheduledTask.unlockAt.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+      })} - ${nextScheduledTask.task.type} session`
+    : readyTasks.length > 0
+      ? `Task schedule: ${readyTasks.length} sessions ready right now`
+      : 'Task schedule: queue synced. New sessions unlock across the day.'
+  const nextTaskPath = readyTasks[0] ? `/tasks/${readyTasks[0].id}` : '/tasks'
+  const aiNow = useMemo(() => new Date(aiPulseNowMs), [aiPulseNowMs])
+  const aiLocalState = useMemo(
+    () => getAIBotLocalState(aiNow),
+    [aiNow, currentUser?.id, currentUser?.email],
+  )
+  const aiBotDisplayActive = useMemo(
+    () => isAIBotDisplayActiveForUser(currentUser, aiNow),
+    [aiNow, currentUser],
+  )
+  const aiBotAutomationActive = useMemo(
+    () => isAIBotAutomationActiveForUser(currentUser, aiNow),
+    [aiNow, currentUser],
+  )
+  const aiBotStatusLabel = useMemo(() => {
+    if (aiBotAutomationActive) {
+      return 'Active'
+    }
+
+    if (aiBotDisplayActive && aiLocalState.checkpointRequired) {
+      return 'Checkpoint Required'
+    }
+
+    if (aiBotDisplayActive) {
+      return 'Active'
+    }
+
+    return dashboardSummary.aiBotStatus
+  }, [aiBotAutomationActive, aiBotDisplayActive, aiLocalState.checkpointRequired, dashboardSummary.aiBotStatus])
+  const aiBotActionLabel = aiBotDisplayActive
+    ? 'Manage automation'
+    : 'Activate automation'
+
   const dailyProgress = Math.min(
-    (dashboardSummary.todayEarnings / dashboardSummary.dailyLimit) * 100,
+    Math.max(Number(dashboardSummary.taskCompletionRate || 0), 0),
     100,
   )
+  const activityPageCount = Math.max(1, Math.ceil(activityFeed.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setActivityPage((current) => Math.min(current, activityPageCount))
+  }, [activityPageCount])
+
+  useEffect(() => {
+    const pulseTimer = window.setInterval(() => {
+      setAiPulseNowMs(Date.now())
+    }, 30_000)
+
+    return () => {
+      window.clearInterval(pulseTimer)
+    }
+  }, [])
+
+  const paginatedActivityFeed = useMemo(() => {
+    const startIndex = (activityPage - 1) * PAGE_SIZE
+    return activityFeed.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [activityFeed, activityPage])
 
   return (
     <div className="space-y-6">
@@ -75,21 +161,39 @@ export function DashboardPage() {
                   and sponsored reward tasks. Tier upgrades increase queue
                   size, earning ceiling, and bot access.
                 </p>
+                <p className="mt-3 inline-flex rounded-full border border-[var(--border-soft)] bg-[var(--surface-overlay)] px-3 py-1 text-xs uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                  {scheduleText}
+                </p>
               </div>
 
               <div className="flex shrink-0 items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl bg-[var(--button-primary-bg)] px-4 text-sm font-semibold text-[var(--button-primary-text)] transition hover:bg-[var(--button-primary-hover)]"
+                  disabled={!hasWithdrawableBalance}
+                  onClick={() => {
+                    if (!hasWithdrawableBalance) {
+                      return
+                    }
+
+                    navigate('/wallet?modal=withdraw')
+                  }}
+                  className={clsx(
+                    'inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-panel)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-hover)]',
+                    hasWithdrawableBalance
+                      ? ''
+                      : 'cursor-not-allowed border-[var(--border-soft)] bg-[var(--surface-subtle)] text-[var(--text-tertiary)] hover:bg-[var(--surface-subtle)]',
+                  )}
                 >
+                  <ArrowUpRight className="h-4 w-4" />
                   Withdraw
                 </button>
-                <button
-                  type="button"
-                  className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                <Link
+                  to="/wallet?modal=deposit"
+                  className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110"
                 >
+                  <ArrowDownLeft className="h-4 w-4" />
                   Deposit
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -114,7 +218,7 @@ export function DashboardPage() {
                   <CircleGauge className="h-5 w-5 text-[var(--blue)]" />
                 </div>
                 <p className="mt-4 font-display text-2xl font-semibold text-[var(--text-primary)]">
-                  {dashboardSummary.activeQueue} tasks
+                  {activeQueueCount} tasks
                 </p>
               </div>
 
@@ -170,7 +274,7 @@ export function DashboardPage() {
                   AI bot
                 </p>
                 <h3 className="mt-2 font-display text-2xl font-semibold text-[var(--text-primary)]">
-                  {dashboardSummary.aiBotStatus}
+                  {aiBotStatusLabel}
                 </h3>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface-hover)] text-[var(--glow)]">
@@ -181,13 +285,13 @@ export function DashboardPage() {
               Premium automation handles repetitive queue work, but still
               requires periodic human validation to preserve platform integrity.
             </p>
-            <button
-              type="button"
+            <Link
+              to="/ai-bot"
               className="mt-3 inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
-              Activate automation
+              {aiBotActionLabel}
               <ArrowUpRight className="h-4 w-4" />
-            </button>
+            </Link>
           </div>
         </div>
       </section>
@@ -204,14 +308,14 @@ export function DashboardPage() {
               </h3>
             </div>
             <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-2 text-sm text-[var(--text-secondary)]">
-              {dailyProgress.toFixed(0)}% of today&apos;s cap reached
+              {dailyProgress.toFixed(0)}% of today&apos;s queue completed
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                Today&apos;s earnings
+                Today&apos;s task rewards
               </p>
               <p className="mt-3 font-display text-3xl font-semibold text-[var(--text-primary)]">
                 {formatUsd(dashboardSummary.todayEarnings)}
@@ -235,14 +339,14 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-6">
-            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-              <span>Daily limit</span>
-              <span>{formatUsd(dashboardSummary.dailyLimit)}</span>
-            </div>
-            <div className="mt-3 h-3 overflow-hidden rounded-full bg-[var(--surface-track)]">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--blue)]"
+            <div className="mt-6">
+              <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                <span>Daily task quota</span>
+                <span>{`${dashboardSummary.dailyLimit} tasks`}</span>
+              </div>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-[var(--surface-track)]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--purple)] to-[var(--blue)]"
                 style={{ width: `${dailyProgress}%` }}
               />
             </div>
@@ -258,7 +362,7 @@ export function DashboardPage() {
           </h3>
           <div className="mt-6 space-y-3">
             <Link
-              to="/tasks"
+              to={nextTaskPath}
               className="flex items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[rgba(124,58,237,0.14)] px-4 py-4 transition hover:border-[var(--border-strong)] hover:bg-[rgba(124,58,237,0.18)]"
             >
               <div>
@@ -270,21 +374,21 @@ export function DashboardPage() {
               <Play className="h-5 w-5 text-[var(--glow)]" />
             </Link>
 
-            <button
-              type="button"
+            <Link
+              to="/wallet?modal=deposit"
               className="flex w-full items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
               <div>
                 <p className="font-medium text-[var(--text-primary)]">Deposit</p>
                 <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Add USDT to unlock more daily tasks
+                  Add USD to unlock more daily tasks
                 </p>
               </div>
               <Wallet className="h-5 w-5 text-[var(--blue)]" />
-            </button>
+            </Link>
 
-            <button
-              type="button"
+            <Link
+              to="/profile?modal=tier-upgrade"
               className="flex w-full items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
               <div>
@@ -294,7 +398,7 @@ export function DashboardPage() {
                 </p>
               </div>
               <TrendingUp className="h-5 w-5 text-[var(--warning)]" />
-            </button>
+            </Link>
           </div>
         </div>
       </section>
@@ -328,8 +432,9 @@ export function DashboardPage() {
                 className="group min-w-[260px] flex-1 rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel-strong)] p-4 sm:min-w-[280px]"
               >
                 <div className="relative aspect-[4/3] overflow-hidden rounded-[24px]">
-                  <img
+                  <TaskCoverImage
                     src={task.coverImage}
+                    type={task.type}
                     alt={`${task.title} cover art`}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
@@ -400,7 +505,13 @@ export function DashboardPage() {
           </div>
 
           <div className="mt-6 space-y-3">
-            {activityFeed.map((item) => (
+            {activityFeed.length === 0 && (
+              <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
+                No activity yet. Complete your first task to see earnings history.
+              </div>
+            )}
+
+            {paginatedActivityFeed.map((item) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4"
@@ -422,6 +533,12 @@ export function DashboardPage() {
               </div>
             ))}
           </div>
+          <PaginationControls
+            itemLabel="activities"
+            onPageChange={setActivityPage}
+            page={activityPage}
+            totalItems={activityFeed.length}
+          />
         </div>
 
         <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
@@ -481,11 +598,10 @@ export function DashboardPage() {
               Weekly forecast
             </p>
             <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
-              {formatCompactUsd(56_000)}
+              {formatUsd(dashboardSummary.weeklyEarnings)}
             </p>
             <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              If you maintain current completion rate and unlock three more live
-              music tasks.
+              If you maintain current completion rate and clear the open queue this week.
             </p>
           </div>
         </div>

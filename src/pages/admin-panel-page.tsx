@@ -1,117 +1,365 @@
-﻿import { AlertTriangle, CheckCircle2, ShieldAlert, Users } from 'lucide-react'
-
-const users = [
-  { id: 'u1', name: 'Alex Johnson', tier: 'Tier 2', status: 'Active' },
-  { id: 'u2', name: 'Mira Sol', tier: 'Tier 1', status: 'KYC Pending' },
-  { id: 'u3', name: 'Nova Kade', tier: 'Tier 3', status: 'Active' },
-]
-
-const txns = [
-  { id: 't1', type: 'Deposit', amount: '+$500', status: 'Completed' },
-  { id: 't2', type: 'Withdrawal', amount: '-$200', status: 'Pending' },
-  { id: 't3', type: 'Reward', amount: '+$12.4', status: 'Completed' },
-]
-
-const approvals = [
-  { id: 'c1', campaign: 'Moonline Rush Boost', status: 'Approved' },
-  { id: 'c2', campaign: 'Gallery Bloom Push', status: 'Review' },
-  { id: 'c3', campaign: 'City Lights Ad', status: 'Flagged' },
-]
-
-const alerts = [
-  'Unusual completion spike detected on account #A23',
-  'Repeated muted-session violations on ad queue',
-  'Withdrawal request above tier threshold requires manual review',
-]
+﻿import {
+  CheckCircle2,
+  Database,
+  ShieldAlert,
+  UserCheck,
+  Users,
+  XCircle,
+} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { PaginationControls } from '../components/pagination-controls'
+import { useAdminOverview } from '../hooks/use-admin-overview'
+import { formatUsd } from '../lib/format'
 
 function statusTone(status: string) {
-  if (status === 'Active' || status === 'Completed' || status === 'Approved') {
+  if (status === 'Active' || status === 'Completed' || status === 'approved') {
     return 'text-emerald-300'
   }
-  if (status === 'Review' || status === 'Pending' || status === 'KYC Pending') {
+
+  if (status === 'pending') {
     return 'text-amber-200'
   }
+
   return 'text-rose-300'
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return 'Not set'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return 'Not set'
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function formatMethod(value: string) {
+  if (value === 'crypto') {
+    return 'Crypto Wallet'
+  }
+
+  return 'Crypto Wallet'
+}
+
 export function AdminPanelPage() {
+  const PAGE_SIZE = 5
+  const {
+    overview,
+    isLoading,
+    isBusy,
+    error,
+    message,
+    approveWithdrawal,
+    rejectWithdrawal,
+  } = useAdminOverview()
+
+  const { users, transactions, withdrawals, stats } = overview
+  const [usersPage, setUsersPage] = useState(1)
+  const [transactionsPage, setTransactionsPage] = useState(1)
+  const [withdrawalsPage, setWithdrawalsPage] = useState(1)
+
+  const usersPageCount = Math.max(1, Math.ceil(users.length / PAGE_SIZE))
+  const transactionsPageCount = Math.max(
+    1,
+    Math.ceil(transactions.length / PAGE_SIZE),
+  )
+  const withdrawalsPageCount = Math.max(
+    1,
+    Math.ceil(withdrawals.length / PAGE_SIZE),
+  )
+
+  useEffect(() => {
+    setUsersPage((current) => Math.min(current, usersPageCount))
+  }, [usersPageCount])
+
+  useEffect(() => {
+    setTransactionsPage((current) => Math.min(current, transactionsPageCount))
+  }, [transactionsPageCount])
+
+  useEffect(() => {
+    setWithdrawalsPage((current) => Math.min(current, withdrawalsPageCount))
+  }, [withdrawalsPageCount])
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (usersPage - 1) * PAGE_SIZE
+    return users.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [users, usersPage])
+
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (transactionsPage - 1) * PAGE_SIZE
+    return transactions.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [transactions, transactionsPage])
+
+  const paginatedWithdrawals = useMemo(() => {
+    const startIndex = (withdrawalsPage - 1) * PAGE_SIZE
+    return withdrawals.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [withdrawals, withdrawalsPage])
+
   return (
     <div className="space-y-6">
-      <section className="surface-glow overflow-hidden rounded-[30px] p-6" style={{ backgroundImage: 'var(--gradient-hero-placeholder)' }}>
-        <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">Admin control</p>
-        <h2 className="mt-3 font-display text-4xl font-semibold text-[var(--text-primary)] sm:text-5xl">
-          Users, transactions, and fraud guardrails
-        </h2>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--text-secondary)]">
-          Review user integrity, campaign approvals, and suspicious wallet actions in one unified panel.
+      <section className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+        <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+          Admin Operations
         </p>
+        <h2 className="mt-3 font-display text-4xl font-semibold text-[var(--text-primary)] sm:text-5xl">
+          Admin Control Center
+        </h2>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--text-secondary)]">
+          Manage users, payout transactions, and withdrawal approvals from one
+          admin-only dashboard.
+        </p>
+        {isLoading && (
+          <p className="mt-4 text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+            Loading admin data
+          </p>
+        )}
+        {message && (
+          <p className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            {message}
+          </p>
+        )}
+        {error && (
+          <p className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            {error}
+          </p>
+        )}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
-        <article className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
-          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Total Users
+            </p>
             <Users className="h-4 w-4 text-[var(--glow)]" />
-            Users table
-          </p>
-          <div className="mt-4 space-y-3">
-            {users.map((user) => (
-              <div key={user.id} className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
-                <p className="font-medium text-[var(--text-primary)]">{user.name}</p>
-                <p className="mt-1 text-xs text-[var(--text-tertiary)]">{user.tier}</p>
-                <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(user.status)}`}>{user.status}</p>
-              </div>
-            ))}
           </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.totalUsers}
+          </p>
         </article>
 
-        <article className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
-          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-            <ShieldAlert className="h-4 w-4 text-[var(--warning)]" />
-            Transactions
+        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Active Users
+            </p>
+            <UserCheck className="h-4 w-4 text-emerald-300" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.activeUsers}
+          </p>
+        </article>
+
+        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Task Catalog
+            </p>
+            <Database className="h-4 w-4 text-[var(--blue)]" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.totalTasks}
+          </p>
+        </article>
+
+        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Payout Events
+            </p>
+            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.totalTransactions}
+          </p>
+        </article>
+
+        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Pending Withdrawals
+            </p>
+            <ShieldAlert className="h-4 w-4 text-amber-200" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.pendingWithdrawals}
+          </p>
+        </article>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <article className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
+            <Users className="h-4 w-4 text-[var(--glow)]" />
+            Registered Users
+          </p>
+
+          {users.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+              No users yet.
+            </div>
+          ) : (
+            <>
+              <div className="thin-scrollbar mt-4 overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                      <th className="px-3 py-2 font-medium">Name</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
+                      <th className="px-3 py-2 font-medium">Tier</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedUsers.map((user) => (
+                      <tr
+                        key={user.id}
+                        className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)]"
+                      >
+                        <td className="px-3 py-3 font-medium text-[var(--text-primary)]">
+                          {user.name}
+                        </td>
+                        <td className="px-3 py-3 text-[var(--text-secondary)]">{user.email}</td>
+                        <td className="px-3 py-3 text-[var(--text-secondary)]">{user.tier}</td>
+                        <td
+                          className={`px-3 py-3 text-xs font-semibold uppercase ${statusTone(user.status)}`}
+                        >
+                          {user.status}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls
+                itemLabel="users"
+                onPageChange={setUsersPage}
+                page={usersPage}
+                totalItems={users.length}
+              />
+            </>
+          )}
+        </article>
+
+        <article className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
+            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+            Recent Transactions
           </p>
           <div className="mt-4 space-y-3">
-            {txns.map((txn) => (
-              <div key={txn.id} className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-[var(--text-primary)]">{txn.type}</p>
-                  <p className="font-display text-lg font-semibold text-[var(--text-primary)]">{txn.amount}</p>
+            {transactions.length === 0 && (
+              <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+                No payout transactions yet.
+              </div>
+            )}
+
+            {paginatedTransactions.map((txn) => (
+              <div
+                key={txn.id}
+                className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate font-medium text-[var(--text-primary)]">{txn.type}</p>
+                  <p className="font-display text-lg font-semibold text-emerald-300">
+                    {txn.amount}
+                  </p>
                 </div>
-                <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(txn.status)}`}>{txn.status}</p>
+                <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(txn.status)}`}>
+                  {txn.status}
+                </p>
               </div>
             ))}
+            <PaginationControls
+              itemLabel="transactions"
+              onPageChange={setTransactionsPage}
+              page={transactionsPage}
+              totalItems={transactions.length}
+            />
           </div>
         </article>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
-        <article className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
-          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-            Campaign approvals
-          </p>
-          <div className="mt-4 space-y-3">
-            {approvals.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
-                <p className="font-medium text-[var(--text-primary)]">{item.campaign}</p>
-                <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(item.status)}`}>{item.status}</p>
-              </div>
-            ))}
-          </div>
-        </article>
+      <section className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+        <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
+          <ShieldAlert className="h-4 w-4 text-amber-200" />
+          Withdrawal Requests
+        </p>
 
-        <article className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
-          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-            <AlertTriangle className="h-4 w-4 text-rose-300" />
-            Fraud alerts
-          </p>
-          <div className="mt-4 space-y-3">
-            {alerts.map((alert) => (
-              <div key={alert} className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm leading-6 text-rose-100">
-                {alert}
+        <div className="mt-4 space-y-3">
+          {withdrawals.length === 0 && (
+            <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+              No withdrawal requests available.
+            </div>
+          )}
+
+          {paginatedWithdrawals.map((request) => (
+            <article
+              key={request.id}
+              className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-[var(--text-primary)]">{request.userName}</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">{request.userEmail}</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    {formatMethod(request.paymentMethod)}
+                    {request.paymentReference ? ` | ${request.paymentReference}` : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-display text-xl font-semibold text-[var(--text-primary)]">
+                    {formatUsd(request.amount)}
+                  </p>
+                  <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(request.status)}`}>
+                    {request.status}
+                  </p>
+                </div>
               </div>
-            ))}
-          </div>
-        </article>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Requested: {formatDateTime(request.requestedAt)}
+                  {request.processedAt ? ` | Processed: ${formatDateTime(request.processedAt)}` : ''}
+                </p>
+
+                {request.status === 'pending' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => approveWithdrawal(request.id)}
+                      className="inline-flex h-9 items-center gap-1 rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => rejectWithdrawal(request.id)}
+                      className="inline-flex h-9 items-center gap-1 rounded-xl border border-rose-400/35 bg-rose-500/10 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </article>
+          ))}
+          <PaginationControls
+            itemLabel="requests"
+            onPageChange={setWithdrawalsPage}
+            page={withdrawalsPage}
+            totalItems={withdrawals.length}
+          />
+        </div>
       </section>
     </div>
   )

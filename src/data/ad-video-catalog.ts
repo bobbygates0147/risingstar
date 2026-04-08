@@ -1,0 +1,23 @@
+export const AD_VIDEO_ASSETS = [
+  '/ads/10%20seconds%20ad.mp4',
+  '/ads/Air%20Asia%20-%20Billboard%20-%20Animation%20-%2010%20seconds%20_%20animated%20advertisement%20commercials.mp4',
+  '/ads/Business%20Success%20Formula%E0%AE%B5%E0%AF%87%E0%AE%A3%E0%AF%8D%E0%AE%9F%E0%AF%81%E0%AE%AE%E0%AE%BE_%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/CINEMATIC%20PRODUCT%20VIDEO%20_%20Go%20Good%20Drinks.mp4',
+  '/ads/FileBox%20_%20Storage%20Box%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/How%20To%20Clean%20CoronaVirus%20From%20Your%20Car%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/Pandiyar%20Kudil%20_%20Online%20Grocery%20Store%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/Rubic%20Business%20Loans%20_%20Tamil%20Video%20Ad%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/Skin%20Care%20Product%20example%20commercial.mp4',
+  '/ads/SLING%20BABY%20_%20Doritos%20Commercial%20_%20%23superbowl%20%23commercials.mp4',
+  '/ads/Soft%20Drink%20Motion%20Ads%20in%20After%20effect%20__%20Product%20animation.mp4',
+  '/ads/Sysmantech%20Ad%20_%20Vu%20Smart%20TV%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/Vajra%20Wellness%20_%20Video%20Brochure%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/videoplayback%20(1).mp4',
+  '/ads/videoplayback%20(2).mp4',
+  '/ads/videoplayback.mp4',
+  '/ads/Watch%20a%2010%20sec%20Coca%20Cola%20Commercial.mp4',
+  '/ads/Wheels%20%26%20Miles_%20Employee%20Transportation%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/Winworth%20Groups%20_%20Financial%20Services%20_%2010%20Seconds%20Video%20Ads.mp4',
+  '/ads/World%20No%20Tobacco%20Day%20_%2010%20Seconds%20Video%20Ads.mp4',
+] as const
+

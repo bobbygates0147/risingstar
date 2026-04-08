@@ -182,13 +182,13 @@ function pickAdMedia(taskId: string) {
 }
 
 function sanitizeCoverImage(type: RewardTask['type'], id: string, value: string) {
-  if (type === 'Ads') {
-    return pickAdDummyCover(id)
-  }
-
   const cleanValue = value.trim()
   if (cleanValue.length > 0) {
     return cleanValue
+  }
+
+  if (type === 'Ads') {
+    return pickAdDummyCover(id)
   }
 
   return typeCoverFallback[type]
@@ -391,25 +391,18 @@ function toRewardTask(value: unknown): RewardTask | null {
 
 function mergeWithFallbackCatalog(remoteTasks: RewardTask[]) {
   const merged = [...remoteTasks]
-  const nonAdCoverKeys = new Set(
-    merged
-      .filter((task) => task.type !== 'Ads')
-      .map((task) => `${task.type}|${task.coverImage}`),
-  )
+  const hasRemoteMusic = remoteTasks.some((task) => task.type === 'Music')
+  const hasRemoteArt = remoteTasks.some((task) => task.type === 'Art')
+  const hasRemoteAds = remoteTasks.some((task) => task.type === 'Ads')
 
-  fallbackTasks.forEach((task) => {
-    if (task.type === 'Ads') {
-      return
-    }
+  if (!hasRemoteMusic) {
+    merged.push(...fallbackTasks.filter((task) => task.type === 'Music'))
+  }
 
-    const key = `${task.type}|${task.coverImage}`
-    if (!nonAdCoverKeys.has(key)) {
-      merged.push(task)
-      nonAdCoverKeys.add(key)
-    }
-  })
+  if (!hasRemoteArt) {
+    merged.push(...fallbackTasks.filter((task) => task.type === 'Art'))
+  }
 
-  const hasRemoteAds = merged.some((task) => task.type === 'Ads')
   if (!hasRemoteAds) {
     merged.push(...fallbackTasks.filter((task) => task.type === 'Ads'))
   }

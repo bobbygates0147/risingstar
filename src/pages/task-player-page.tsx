@@ -85,6 +85,8 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
 }
 
 const MEDIA_END_COMPLETION_THRESHOLD_SECONDS = 2
+const SEEK_TOLERANCE_SECONDS = 0.2
+const SEEK_WARNING_COOLDOWN_MS = 4000
 
 function parseDurationToSeconds(duration: string) {
   const [minutesRaw, secondsRaw] = duration.split(':')
@@ -156,6 +158,8 @@ export function TaskPlayerPage() {
   const shouldAutoReturnRef = useRef(false)
   const resumeAfterUnmuteRef = useRef(false)
   const openedSessionRef = useRef<string | null>(null)
+  const maxPlayedSecondsRef = useRef(0)
+  const lastSeekWarningAtRef = useRef(0)
   const config = task ? taskPlayerConfig[task.type] : null
   const totalSeconds = task ? parseDurationToSeconds(task.duration) : 0
   const taskSessionId = task?.id ?? ''
@@ -286,6 +290,59 @@ export function TaskPlayerPage() {
     return mediaElement.muted || mediaElement.volume <= 0.001
   }
 
+  function notifySkipBlocked() {
+    const now = Date.now()
+    if (now - lastSeekWarningAtRef.current < SEEK_WARNING_COOLDOWN_MS) {
+      return
+    }
+
+    lastSeekWarningAtRef.current = now
+    showToast({
+      variant: 'warning',
+      title: 'Skipping is disabled',
+      description: 'Music and ad playback must run from start to finish at 1x speed.',
+    })
+  }
+
+  function updateMaxPlayedSeconds(mediaElement: HTMLMediaElement) {
+    const currentTime = Number.isFinite(mediaElement.currentTime)
+      ? mediaElement.currentTime
+      : 0
+
+    if (currentTime > maxPlayedSecondsRef.current) {
+      maxPlayedSecondsRef.current = currentTime
+    }
+  }
+
+  function enforceNoSkip(mediaElement: HTMLMediaElement) {
+    if (isTimeLocked || isCompleted || !requiresMediaValidation) {
+      return
+    }
+
+    const currentTime = Number.isFinite(mediaElement.currentTime)
+      ? mediaElement.currentTime
+      : 0
+    const maxAllowed = maxPlayedSecondsRef.current + SEEK_TOLERANCE_SECONDS
+
+    if (currentTime > maxAllowed) {
+      mediaElement.currentTime = Math.max(maxPlayedSecondsRef.current, 0)
+      notifySkipBlocked()
+    }
+  }
+
+  function enforcePlaybackRate(mediaElement: HTMLMediaElement) {
+    if (!Number.isFinite(mediaElement.playbackRate)) {
+      return
+    }
+
+    if (Math.abs(mediaElement.playbackRate - 1) <= 0.001) {
+      return
+    }
+
+    mediaElement.playbackRate = 1
+    notifySkipBlocked()
+  }
+
   function updateMuteValidation(mediaElement: HTMLMediaElement) {
     if (isTimeLocked || isCompleted || !requiresMediaValidation) {
       resumeAfterUnmuteRef.current = false
@@ -399,6 +456,8 @@ export function TaskPlayerPage() {
 
     completionNotifiedRef.current = false
     resumeAfterUnmuteRef.current = false
+    maxPlayedSecondsRef.current = 0
+    lastSeekWarningAtRef.current = 0
     const nextTotalSeconds = parseDurationToSeconds(taskDuration)
     const resetTimer = window.setTimeout(() => {
       setMusicMediaIndex(0)
@@ -666,10 +725,22 @@ export function TaskPlayerPage() {
                     poster={task.coverImage}
                     preload="metadata"
                     src={currentAdVideoUrl}
+                    onLoadedMetadata={(event) => {
+                      maxPlayedSecondsRef.current = Math.max(
+                        Number.isFinite(event.currentTarget.currentTime)
+                          ? event.currentTarget.currentTime
+                          : 0,
+                        0,
+                      )
+                      event.currentTarget.playbackRate = 1
+                    }}
                     onPlay={(event) => {
                       if (isTimeLocked || isCompleted) {
                         return
                       }
+
+                      enforceNoSkip(event.currentTarget)
+                      enforcePlaybackRate(event.currentTarget)
 
                       if (updateMuteValidation(event.currentTarget)) {
                         event.currentTarget.pause()
@@ -683,20 +754,30 @@ export function TaskPlayerPage() {
                     onPause={(event) => {
                       handleMediaPause(event.currentTarget)
                     }}
+                    onTimeUpdate={(event) => {
+                      updateMaxPlayedSeconds(event.currentTarget)
+                    }}
+                    onSeeking={(event) => {
+                      enforceNoSkip(event.currentTarget)
+                    }}
+                    onRateChange={(event) => {
+                      enforcePlaybackRate(event.currentTarget)
+                    }}
                     onEnded={() => {
                       continueCountdownAfterMediaEnd()
                     }}
                     onVolumeChange={(event) => {
                       updateMuteValidation(event.currentTarget)
                     }}
-                    onError={() => {
-                      setIsRunning(false)
-                      setAdMediaIndex((current) => {
-                        const next = current + 1
-                        if (next < adMediaCandidates.length) {
-                          return next
-                        }
-                        setAdMediaExhausted(true)
+                  onError={() => {
+                    setIsRunning(false)
+                    setAdMediaIndex((current) => {
+                      const next = current + 1
+                      if (next < adMediaCandidates.length) {
+                        maxPlayedSecondsRef.current = 0
+                        return next
+                      }
+                      setAdMediaExhausted(true)
                         return current
                       })
                     }}
@@ -772,10 +853,22 @@ export function TaskPlayerPage() {
                   controls
                   preload="metadata"
                   src={currentMusicUrl}
+                  onLoadedMetadata={(event) => {
+                    maxPlayedSecondsRef.current = Math.max(
+                      Number.isFinite(event.currentTarget.currentTime)
+                        ? event.currentTarget.currentTime
+                        : 0,
+                      0,
+                    )
+                    event.currentTarget.playbackRate = 1
+                  }}
                   onPlay={(event) => {
                     if (isTimeLocked || isCompleted) {
                       return
                     }
+
+                    enforceNoSkip(event.currentTarget)
+                    enforcePlaybackRate(event.currentTarget)
 
                     if (updateMuteValidation(event.currentTarget)) {
                       event.currentTarget.pause()
@@ -789,6 +882,15 @@ export function TaskPlayerPage() {
                   onPause={(event) => {
                     handleMediaPause(event.currentTarget)
                   }}
+                  onTimeUpdate={(event) => {
+                    updateMaxPlayedSeconds(event.currentTarget)
+                  }}
+                  onSeeking={(event) => {
+                    enforceNoSkip(event.currentTarget)
+                  }}
+                  onRateChange={(event) => {
+                    enforcePlaybackRate(event.currentTarget)
+                  }}
                   onEnded={() => {
                     continueCountdownAfterMediaEnd()
                   }}
@@ -800,6 +902,7 @@ export function TaskPlayerPage() {
                     setMusicMediaIndex((current) => {
                       const next = current + 1
                       if (next < musicMediaCandidates.length) {
+                        maxPlayedSecondsRef.current = 0
                         return next
                       }
                       setMusicMediaExhausted(true)

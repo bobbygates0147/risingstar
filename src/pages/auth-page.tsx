@@ -683,46 +683,44 @@ export function SignupPaymentPage() {
 
           {selectedNetworkOption && (
             <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] p-4">
-              <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-                    Send {formatUsd(selectedTier.feeUsd)} To
-                  </p>
-                  <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">
-                    {selectedNetworkOption.address}
-                  </p>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <span className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-                      {selectedNetworkOption.label}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyAddress}
-                      className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
-                    >
-                      {copyState === 'copied' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                      {copyState === 'copied' ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
+              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                Send {formatUsd(selectedTier.feeUsd)} To
+              </p>
+              <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">
+                {selectedNetworkOption.address}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
+                  {selectedNetworkOption.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyAddress}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                >
+                  {copyState === 'copied' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copyState === 'copied' ? 'Copied' : 'Copy'}
+                </button>
+              </div>
 
-                <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-2">
+              <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-3">
+                <div className="mx-auto w-fit rounded-xl border border-[var(--border-soft)] bg-white p-1.5">
                   {!qrLoadError && qrImageUrl ? (
                     <img
                       src={qrImageUrl}
                       alt={`Scan QR barcode for ${selectedNetworkOption.label} payment`}
-                      className="h-28 w-28 rounded-xl object-cover sm:h-32 sm:w-32"
+                      className="h-40 w-40 rounded-lg object-cover sm:h-44 sm:w-44"
                       onError={() => setQrLoadError(true)}
                     />
                   ) : (
-                    <div className="flex h-28 w-28 items-center justify-center rounded-xl border border-dashed border-[var(--border-soft)] text-center text-[11px] text-[var(--text-tertiary)] sm:h-32 sm:w-32">
+                    <div className="flex h-40 w-40 items-center justify-center rounded-lg border border-dashed border-[var(--border-soft)] text-center text-[11px] text-[var(--text-tertiary)] sm:h-44 sm:w-44">
                       QR unavailable
                     </div>
                   )}
-                  <p className="mt-2 text-center text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                    Scan To Pay
-                  </p>
                 </div>
+                <p className="mt-2 text-center text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                  Scan To Pay
+                </p>
               </div>
             </div>
           )}

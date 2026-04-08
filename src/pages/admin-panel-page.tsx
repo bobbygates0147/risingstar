@@ -16,7 +16,7 @@ function statusTone(status: string) {
     return 'text-emerald-300'
   }
 
-  if (status === 'pending') {
+  if (status === 'pending' || status === 'Pending') {
     return 'text-amber-200'
   }
 
@@ -57,12 +57,15 @@ export function AdminPanelPage() {
     message,
     approveWithdrawal,
     rejectWithdrawal,
+    approveDeposit,
+    rejectDeposit,
   } = useAdminOverview()
 
-  const { users, transactions, withdrawals, stats } = overview
+  const { users, transactions, withdrawals, deposits, stats } = overview
   const [usersPage, setUsersPage] = useState(1)
   const [transactionsPage, setTransactionsPage] = useState(1)
   const [withdrawalsPage, setWithdrawalsPage] = useState(1)
+  const [depositsPage, setDepositsPage] = useState(1)
 
   const usersPageCount = Math.max(1, Math.ceil(users.length / PAGE_SIZE))
   const transactionsPageCount = Math.max(
@@ -73,6 +76,7 @@ export function AdminPanelPage() {
     1,
     Math.ceil(withdrawals.length / PAGE_SIZE),
   )
+  const depositsPageCount = Math.max(1, Math.ceil(deposits.length / PAGE_SIZE))
 
   useEffect(() => {
     setUsersPage((current) => Math.min(current, usersPageCount))
@@ -85,6 +89,10 @@ export function AdminPanelPage() {
   useEffect(() => {
     setWithdrawalsPage((current) => Math.min(current, withdrawalsPageCount))
   }, [withdrawalsPageCount])
+
+  useEffect(() => {
+    setDepositsPage((current) => Math.min(current, depositsPageCount))
+  }, [depositsPageCount])
 
   const paginatedUsers = useMemo(() => {
     const startIndex = (usersPage - 1) * PAGE_SIZE
@@ -100,6 +108,11 @@ export function AdminPanelPage() {
     const startIndex = (withdrawalsPage - 1) * PAGE_SIZE
     return withdrawals.slice(startIndex, startIndex + PAGE_SIZE)
   }, [withdrawals, withdrawalsPage])
+
+  const paginatedDeposits = useMemo(() => {
+    const startIndex = (depositsPage - 1) * PAGE_SIZE
+    return deposits.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [deposits, depositsPage])
 
   return (
     <div className="space-y-6">
@@ -131,7 +144,7 @@ export function AdminPanelPage() {
         )}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
@@ -189,6 +202,18 @@ export function AdminPanelPage() {
           </div>
           <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
             {stats.pendingWithdrawals}
+          </p>
+        </article>
+
+        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Pending Deposits
+            </p>
+            <ShieldAlert className="h-4 w-4 text-amber-200" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.pendingDeposits ?? 0}
           </p>
         </article>
       </section>
@@ -358,6 +383,98 @@ export function AdminPanelPage() {
             onPageChange={setWithdrawalsPage}
             page={withdrawalsPage}
             totalItems={withdrawals.length}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+        <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
+          <ShieldAlert className="h-4 w-4 text-amber-200" />
+          Deposit Requests
+        </p>
+
+        <div className="mt-4 space-y-3">
+          {deposits.length === 0 && (
+            <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-sm text-[var(--text-secondary)]">
+              No deposit requests available.
+            </div>
+          )}
+
+          {paginatedDeposits.map((request) => (
+            <article
+              key={request.id}
+              className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-[var(--text-primary)]">{request.userName}</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">{request.userEmail}</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    {request.network}
+                    {request.reference ? ` | ${request.reference}` : ''}
+                  </p>
+                  {request.note && (
+                    <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                      Note: {request.note}
+                    </p>
+                  )}
+                  {request.proofUrl && (
+                    <a
+                      href={request.proofUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex text-xs font-semibold uppercase tracking-[0.12em] text-[var(--blue)]"
+                    >
+                      View proof
+                    </a>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-display text-xl font-semibold text-[var(--text-primary)]">
+                    {formatUsd(request.amount)}
+                  </p>
+                  <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(request.status)}`}>
+                    {request.status}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Requested: {formatDateTime(request.requestedAt)}
+                  {request.processedAt ? ` | Processed: ${formatDateTime(request.processedAt)}` : ''}
+                </p>
+
+                {request.status === 'Pending' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => approveDeposit(request.id)}
+                      className="inline-flex h-9 items-center gap-1 rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => rejectDeposit(request.id)}
+                      className="inline-flex h-9 items-center gap-1 rounded-xl border border-rose-400/35 bg-rose-500/10 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </article>
+          ))}
+          <PaginationControls
+            itemLabel="deposits"
+            onPageChange={setDepositsPage}
+            page={depositsPage}
+            totalItems={deposits.length}
           />
         </div>
       </section>

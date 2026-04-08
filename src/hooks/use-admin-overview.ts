@@ -33,18 +33,34 @@ export type AdminWithdrawal = {
   processedAt: string | null
 }
 
+export type AdminDeposit = {
+  id: string
+  userName: string
+  userEmail: string
+  amount: number
+  network: string
+  reference: string
+  note: string
+  status: 'Pending' | 'Completed' | 'Failed'
+  requestedAt: string | null
+  processedAt: string | null
+  proofUrl: string
+}
+
 export type AdminStats = {
   totalUsers: number
   totalTasks: number
   activeUsers: number
   totalTransactions: number
   pendingWithdrawals: number
+  pendingDeposits?: number
 }
 
 export type AdminOverviewPayload = {
   users: AdminUserRow[]
   transactions: AdminTransaction[]
   withdrawals: AdminWithdrawal[]
+  deposits: AdminDeposit[]
   stats: AdminStats
 }
 
@@ -52,12 +68,14 @@ const fallbackOverview: AdminOverviewPayload = {
   users: [],
   transactions: [],
   withdrawals: [],
+  deposits: [],
   stats: {
     totalUsers: 0,
     totalTasks: 0,
     activeUsers: 0,
     totalTransactions: 0,
     pendingWithdrawals: 0,
+    pendingDeposits: 0,
   },
 }
 
@@ -119,6 +137,26 @@ function isAdminWithdrawal(value: unknown): value is AdminWithdrawal {
   )
 }
 
+function isAdminDeposit(value: unknown): value is AdminDeposit {
+  if (!isObject(value)) {
+    return false
+  }
+
+  return (
+    typeof value.id === 'string' &&
+    typeof value.userName === 'string' &&
+    typeof value.userEmail === 'string' &&
+    typeof value.amount === 'number' &&
+    typeof value.network === 'string' &&
+    typeof value.reference === 'string' &&
+    typeof value.note === 'string' &&
+    (value.status === 'Pending' || value.status === 'Completed' || value.status === 'Failed') &&
+    (typeof value.requestedAt === 'string' || value.requestedAt === null) &&
+    (typeof value.processedAt === 'string' || value.processedAt === null) &&
+    typeof value.proofUrl === 'string'
+  )
+}
+
 function toAdminWithdrawal(value: unknown): AdminWithdrawal | null {
   if (!isAdminWithdrawal(value)) {
     return null
@@ -140,6 +178,7 @@ function toAdminStats(value: unknown): AdminStats {
   const activeUsers = Number(value.activeUsers ?? 0)
   const totalTransactions = Number(value.totalTransactions ?? 0)
   const pendingWithdrawals = Number(value.pendingWithdrawals ?? 0)
+  const pendingDeposits = Number(value.pendingDeposits ?? 0)
 
   return {
     totalUsers: Number.isFinite(totalUsers) ? totalUsers : 0,
@@ -147,6 +186,7 @@ function toAdminStats(value: unknown): AdminStats {
     activeUsers: Number.isFinite(activeUsers) ? activeUsers : 0,
     totalTransactions: Number.isFinite(totalTransactions) ? totalTransactions : 0,
     pendingWithdrawals: Number.isFinite(pendingWithdrawals) ? pendingWithdrawals : 0,
+    pendingDeposits: Number.isFinite(pendingDeposits) ? pendingDeposits : 0,
   }
 }
 
@@ -168,11 +208,26 @@ function toAdminOverview(value: unknown): AdminOverviewPayload {
         .map(toAdminWithdrawal)
         .filter((entry): entry is AdminWithdrawal => entry !== null)
     : fallbackOverview.withdrawals
+  const deposits = Array.isArray(value.deposits)
+    ? value.deposits
+        .filter(isAdminDeposit)
+        .map((deposit) => {
+          if (deposit.proofUrl && deposit.proofUrl.startsWith('/')) {
+            return {
+              ...deposit,
+              proofUrl: `${API_BASE_URL}${deposit.proofUrl}`,
+            }
+          }
+
+          return deposit
+        })
+    : fallbackOverview.deposits
 
   return {
     users,
     transactions,
     withdrawals,
+    deposits,
     stats: toAdminStats(value.stats),
   }
 }
@@ -285,6 +340,63 @@ export function useAdminOverview() {
     [load],
   )
 
+  const processDeposit = useCallback(
+    async (depositId: string, action: 'approve' | 'reject') => {
+      setError('')
+      setMessage('')
+      setIsBusy(true)
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/admin/deposits/${encodeURIComponent(depositId)}/${action}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthorizedHeaders(),
+            },
+          },
+        )
+
+        const payload = (await response.json().catch(() => ({}))) as unknown
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            handleUnauthorized()
+          }
+
+          throw new Error(
+            extractMessage(
+              payload,
+              action === 'approve'
+                ? 'Unable to approve deposit'
+                : 'Unable to reject deposit',
+            ),
+          )
+        }
+
+        setMessage(
+          extractMessage(
+            payload,
+            action === 'approve' ? 'Deposit approved' : 'Deposit rejected',
+          ),
+        )
+        await load(true)
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : action === 'approve'
+              ? 'Unable to approve deposit'
+              : 'Unable to reject deposit',
+        )
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [load],
+  )
+
   return {
     overview,
     isLoading,
@@ -294,5 +406,7 @@ export function useAdminOverview() {
     reload: () => load(true),
     approveWithdrawal: (requestId: string) => processWithdrawal(requestId, 'approve'),
     rejectWithdrawal: (requestId: string) => processWithdrawal(requestId, 'reject'),
+    approveDeposit: (depositId: string) => processDeposit(depositId, 'approve'),
+    rejectDeposit: (depositId: string) => processDeposit(depositId, 'reject'),
   }
 }

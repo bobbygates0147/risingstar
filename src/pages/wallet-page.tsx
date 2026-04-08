@@ -18,6 +18,7 @@ import {
 } from '../lib/crypto-wallets'
 import {
   getAuthenticatedUser,
+  fetchSignupConfig,
   getAuthorizedHeaders,
   refreshAuthenticatedUser,
 } from '../lib/auth'
@@ -35,6 +36,8 @@ type WalletEntry = {
   timeLabel: string
   kind: WalletEntryKind
   network?: CryptoNetwork
+  proofUrl?: string
+  occurredAt?: string
 }
 
 type WalletSummaryResponse = {
@@ -43,6 +46,7 @@ type WalletSummaryResponse = {
     withdrawable?: number
     totalDepositedUsd?: number
     lastDepositAt?: string | null
+    pendingDeposits?: number
   }
   taskCapacity?: {
     baseDailyLimit?: number
@@ -101,6 +105,13 @@ const WALLET_HISTORY_ENDPOINT = `${API_BASE_URL}/api/wallet/history`
 const WALLET_DEPOSIT_ENDPOINT = `${API_BASE_URL}/api/wallet/deposit`
 const WALLET_WITHDRAW_ENDPOINT = `${API_BASE_URL}/api/wallet/withdraw`
 const WALLET_UPDATED_EVENT = 'rising-star:wallet-updated'
+const SUPPORTED_PROOF_MIME_TYPES = new Map<string, string>([
+  ['image/jpeg', 'jpg'],
+  ['image/jpg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+  ['application/pdf', 'pdf'],
+])
 
 const usdFormatter = new Intl.NumberFormat('en-US', {
   currency: 'USD',
@@ -205,6 +216,17 @@ function toWalletEntries(payload: unknown): WalletEntry[] {
       }
 
       const network = isCryptoNetwork(source.network) ? source.network : undefined
+      let proofUrl =
+        typeof source.proofUrl === 'string' && source.proofUrl.trim().length > 0
+          ? source.proofUrl.trim()
+          : undefined
+
+      if (proofUrl && proofUrl.startsWith('/')) {
+        proofUrl = `${API_BASE_URL}${proofUrl}`
+      }
+
+      const occurredAt =
+        typeof source.occurredAt === 'string' ? source.occurredAt : undefined
 
       return {
         id: source.id,
@@ -215,6 +237,8 @@ function toWalletEntries(payload: unknown): WalletEntry[] {
         timeLabel: source.timeLabel,
         kind: source.kind,
         ...(network ? { network } : {}),
+        ...(proofUrl ? { proofUrl } : {}),
+        ...(occurredAt ? { occurredAt } : {}),
       } satisfies WalletEntry
     })
     .filter((entry): entry is WalletEntry => entry !== null)
@@ -222,7 +246,9 @@ function toWalletEntries(payload: unknown): WalletEntry[] {
 
 export function WalletPage() {
   const PAGE_SIZE = 5
-  const walletInstructions = getDefaultCryptoWalletInstructions()
+  const [walletInstructions, setWalletInstructions] = useState(
+    getDefaultCryptoWalletInstructions(),
+  )
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeModal, setActiveModal] = useState<'deposit' | 'withdraw' | null>(
     null,
@@ -232,6 +258,7 @@ export function WalletPage() {
   const [depositAmount, setDepositAmount] = useState('')
   const [depositReference, setDepositReference] = useState('')
   const [depositNote, setDepositNote] = useState('')
+  const [depositProofFile, setDepositProofFile] = useState<File | null>(null)
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawNetwork, setWithdrawNetwork] = useState<'' | CryptoNetwork>('')
   const [withdrawAddress, setWithdrawAddress] = useState('')
@@ -250,12 +277,22 @@ export function WalletPage() {
   const [usdtBalance, setUsdtBalance] = useState(
     Number(authenticatedUser?.walletBalance || 0),
   )
+  const [withdrawableBalance, setWithdrawableBalance] = useState(
+    Number(authenticatedUser?.withdrawableBalance || 0),
+  )
+  const [pendingDeposits, setPendingDeposits] = useState(0)
+  const [lastSummaryUpdatedAt, setLastSummaryUpdatedAt] = useState<Date | null>(
+    null,
+  )
   const [taskCapacityHint, setTaskCapacityHint] = useState('')
   const [depositSubmitting, setDepositSubmitting] = useState(false)
   const [depositError, setDepositError] = useState('')
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
   const [withdrawError, setWithdrawError] = useState('')
   const [historyLoading, setHistoryLoading] = useState(true)
+  const proofFileSizeLabel = depositProofFile
+    ? `${(depositProofFile.size / (1024 * 1024)).toFixed(2)} MB`
+    : ''
   const depositAddress = getWalletAddressByNetwork(
     depositNetwork || 'ERC20',
     walletInstructions,
@@ -333,6 +370,34 @@ export function WalletPage() {
     setCopyState('idle')
   }, [selectedWalletAddressKey])
 
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadWalletInstructions() {
+      const config = await fetchSignupConfig()
+      const crypto = config.paymentInstructions?.crypto
+
+      if (!crypto || !isMounted) {
+        return
+      }
+
+      setWalletInstructions({
+        btcAddress: crypto.btcAddress,
+        ethAddress: crypto.ethAddress,
+        usdtTrc20Address: crypto.usdtTrc20Address,
+        usdtErc20Address: crypto.usdtErc20Address,
+        usdtBep20Address: crypto.usdtBep20Address,
+        solAddress: crypto.solAddress,
+      })
+    }
+
+    void loadWalletInstructions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   const loadWalletSummary = useCallback(async () => {
     try {
       const response = await fetch(WALLET_SUMMARY_ENDPOINT, {
@@ -347,8 +412,13 @@ export function WalletPage() {
 
       const data = (await response.json()) as WalletSummaryResponse
       const nextBalance = Number(data.wallet?.balance || 0)
+      const nextWithdrawable = Number(data.wallet?.withdrawable || 0)
+      const nextPendingDeposits = Number(data.wallet?.pendingDeposits || 0)
       setTotalBalance(nextBalance)
       setUsdtBalance(nextBalance)
+      setWithdrawableBalance(nextWithdrawable)
+      setPendingDeposits(nextPendingDeposits)
+      setLastSummaryUpdatedAt(new Date())
 
       const usdPerExtraTask = Number(data.taskCapacity?.usdPerExtraTask || 0)
       const extraTaskSlots = Number(data.taskCapacity?.extraTaskSlots || 0)
@@ -368,8 +438,14 @@ export function WalletPage() {
       }
     } catch {
       const fallbackBalance = Number(getAuthenticatedUser()?.walletBalance || 0)
+      const fallbackWithdrawable = Number(
+        getAuthenticatedUser()?.withdrawableBalance || 0,
+      )
       setTotalBalance(fallbackBalance)
       setUsdtBalance(fallbackBalance)
+      setWithdrawableBalance(fallbackWithdrawable)
+      setPendingDeposits(0)
+      setLastSummaryUpdatedAt(new Date())
     }
   }, [])
 
@@ -420,6 +496,64 @@ export function WalletPage() {
     return entries.slice(startIndex, startIndex + PAGE_SIZE)
   }, [entries, entriesPage])
 
+  const pendingDepositsCount = pendingDeposits
+  const lastUpdatedLabel = useMemo(() => {
+    if (!lastSummaryUpdatedAt) {
+      return 'Updated just now'
+    }
+
+    const deltaMs = Date.now() - lastSummaryUpdatedAt.getTime()
+    if (deltaMs < 60 * 1000) {
+      return 'Updated just now'
+    }
+
+    if (deltaMs < 60 * 60 * 1000) {
+      const minutes = Math.max(1, Math.floor(deltaMs / (60 * 1000)))
+      return `Updated ${minutes}m ago`
+    }
+
+    if (deltaMs < 24 * 60 * 60 * 1000) {
+      const hours = Math.floor(deltaMs / (60 * 60 * 1000))
+      return `Updated ${hours}h ago`
+    }
+
+    const days = Math.floor(deltaMs / (24 * 60 * 60 * 1000))
+    return `Updated ${days}d ago`
+  }, [lastSummaryUpdatedAt])
+  const pendingDepositsLabel = useMemo(() => {
+    const pendingEntries = entries.filter(
+      (entry) => entry.kind === 'deposit' && entry.status === 'Pending',
+    )
+    if (pendingEntries.length === 0) {
+      return ''
+    }
+
+    const times = pendingEntries
+      .map((entry) => (entry.occurredAt ? new Date(entry.occurredAt) : null))
+      .filter((date): date is Date => Boolean(date) && !Number.isNaN(date.getTime()))
+      .map((date) => date.getTime())
+
+    if (times.length === 0) {
+      return ''
+    }
+
+    const oldest = Math.min(...times)
+    const deltaMs = Date.now() - oldest
+    const minutes = Math.max(1, Math.floor(deltaMs / (60 * 1000)))
+
+    if (minutes < 60) {
+      return `${minutes}m ago`
+    }
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) {
+      return `${hours}h ago`
+    }
+
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+  }, [entries])
+
   async function handleCopyWalletAddress() {
     if (!selectedWalletAddressOption) {
       return
@@ -434,6 +568,51 @@ export function WalletPage() {
     }
   }
 
+  function isPdfFile(url: string) {
+    return url.toLowerCase().includes('.pdf')
+  }
+
+  function resolveProofMime(file: File) {
+    const rawType = file.type?.toLowerCase() || ''
+    if (SUPPORTED_PROOF_MIME_TYPES.has(rawType)) {
+      return rawType
+    }
+
+    const name = file.name?.toLowerCase() || ''
+    if (name.endsWith('.pdf')) return 'application/pdf'
+    if (name.endsWith('.png')) return 'image/png'
+    if (name.endsWith('.webp')) return 'image/webp'
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg'
+
+    return ''
+  }
+
+  async function readFileAsDataUrl(file: File, mimeType: string) {
+    if (!mimeType) {
+      throw new Error('Proof of payment must be a valid image or PDF')
+    }
+
+    if (file.type && file.type.toLowerCase() === mimeType) {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          resolve(typeof reader.result === 'string' ? reader.result : '')
+        }
+        reader.onerror = () => reject(new Error('Unable to read the uploaded proof file.'))
+        reader.readAsDataURL(file)
+      })
+    }
+
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index])
+    }
+    const base64 = btoa(binary)
+    return `data:${mimeType};base64,${base64}`
+  }
+
   function openDepositModal() {
     setActiveModal('deposit')
     setDepositStep(1)
@@ -442,6 +621,7 @@ export function WalletPage() {
     setDepositAmount('')
     setDepositReference('')
     setDepositNote('')
+    setDepositProofFile(null)
   }
 
   function openWithdrawModal() {
@@ -482,9 +662,33 @@ export function WalletPage() {
       return
     }
 
+    if (depositProofFile) {
+      const maxBytes = 4 * 1024 * 1024
+      if (depositProofFile.size > maxBytes) {
+        setDepositError('Proof file is too large. Max size is 4 MB.')
+        return
+      }
+    }
+
     setDepositSubmitting(true)
 
     try {
+      let proofDataUrl: string | undefined
+
+      if (depositProofFile) {
+        const mimeType = resolveProofMime(depositProofFile)
+        if (!mimeType) {
+          throw new Error('Proof of payment must be a valid image or PDF')
+        }
+
+        proofDataUrl = await readFileAsDataUrl(depositProofFile, mimeType)
+
+        if (!proofDataUrl) {
+          throw new Error('Unable to read the uploaded proof file.')
+        }
+
+      }
+
       const response = await fetch(WALLET_DEPOSIT_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -496,6 +700,7 @@ export function WalletPage() {
           network: depositNetwork,
           reference: referenceValue,
           note: noteValue,
+          ...(proofDataUrl ? { proofDataUrl } : {}),
         }),
       })
 
@@ -512,6 +717,9 @@ export function WalletPage() {
       const nextBalance = Number(data.wallet?.balance || 0)
       setTotalBalance(nextBalance)
       setUsdtBalance(nextBalance)
+      if (typeof data.wallet?.withdrawable === 'number') {
+        setWithdrawableBalance(Number(data.wallet.withdrawable))
+      }
 
       if (typeof data.taskCapacity?.usdPerExtraTask === 'number') {
         const bonusSlots = Number(data.taskCapacity.extraTaskSlots || 0)
@@ -529,20 +737,13 @@ export function WalletPage() {
         window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT))
       }
 
-      showToast({
-        title:
-          typeof data.message === 'string' && data.message.trim().length > 0
-            ? data.message
-            : 'Deposit completed successfully.',
-        variant: 'success',
-      })
-
       setActiveModal(null)
       setDepositStep(1)
       setDepositNetwork('')
       setDepositAmount('')
       setDepositReference('')
       setDepositNote('')
+      setDepositProofFile(null)
       setDepositError('')
     } catch (error) {
       const message =
@@ -669,10 +870,10 @@ export function WalletPage() {
         <div />
       </section>
 
-      <section
-        className="surface-glow rounded-[30px] border border-[var(--border-soft)] p-6 shadow-[var(--shadow-panel)] sm:p-8"
-        style={{ backgroundImage: 'var(--gradient-hero-balance)' }}
-      >
+        <section
+          className="surface-glow rounded-[30px] border border-[var(--border-soft)] p-6 shadow-[var(--shadow-panel)] sm:p-8"
+          style={{ backgroundImage: 'var(--gradient-hero-balance)' }}
+        >
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
@@ -680,32 +881,39 @@ export function WalletPage() {
                 <Wallet className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-                  Total Balance
-                </p>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  Available for withdrawal
-                </p>
+                  <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+                    Total Balance
+                  </p>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Available to withdraw: {usdFormatter.format(withdrawableBalance)}
+                  </p>
+                </div>
               </div>
+
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
+                {lastUpdatedLabel}
+              </p>
             </div>
 
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-              Live sync
-            </p>
-          </div>
-
-          <div>
-            <p className="font-display text-4xl font-semibold text-[var(--text-primary)] sm:text-5xl">
-              {usdFormatter.format(totalBalance)}
-            </p>
-            <p className="mt-2 text-sm text-emerald-200">
-              ~= {usdFormatter.format(usdtBalance)} USDT
-            </p>
-            {taskCapacityHint && (
-              <p className="mt-3 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                {taskCapacityHint}
+            <div>
+              <p className="font-display text-4xl font-semibold text-[var(--text-primary)] sm:text-5xl">
+                {usdFormatter.format(totalBalance)}
               </p>
-            )}
+              <p className="mt-2 text-sm text-emerald-200">
+                ≈ {usdFormatter.format(usdtBalance)} USDT
+              </p>
+              {pendingDepositsCount > 0 && (
+                <p className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs uppercase tracking-[0.14em] text-amber-100">
+                  {pendingDepositsCount} deposit
+                  {pendingDepositsCount === 1 ? '' : 's'} pending
+                  {pendingDepositsLabel ? ` • submitted ${pendingDepositsLabel}` : ''}
+                </p>
+              )}
+              {taskCapacityHint && (
+                <p className="mt-3 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                  {taskCapacityHint}
+                </p>
+              )}
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -895,16 +1103,42 @@ export function WalletPage() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                  Time
-                </p>
-                <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-                  {selectedEntry.timeLabel}
-                </p>
+                <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                    Time
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
+                    {selectedEntry.timeLabel}
+                  </p>
+                </div>
+                {selectedEntry.proofUrl && (
+                  <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                      Proof of payment
+                    </p>
+                    <div className="mt-3 flex flex-col gap-3">
+                      <a
+                        href={selectedEntry.proofUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                      >
+                        Open proof file
+                      </a>
+                      {!isPdfFile(selectedEntry.proofUrl) && (
+                        <div className="overflow-hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)]">
+                          <img
+                            src={selectedEntry.proofUrl}
+                            alt="Uploaded proof of payment"
+                            className="w-full max-h-64 object-cover"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ) : (
+            ) : (
             <div className="relative w-full max-w-lg max-h-[calc(100vh-4rem)] overflow-y-auto rounded-[28px] border border-[var(--border-strong)] bg-[var(--surface-panel-strong)] p-6 text-[var(--text-primary)] shadow-[0_30px_80px_rgba(15,23,42,0.45)]">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1099,8 +1333,17 @@ export function WalletPage() {
                       <input
                         type="file"
                         accept="image/*,.pdf"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null
+                          setDepositProofFile(file)
+                        }}
                         className="mt-2 w-full rounded-2xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-sm text-[var(--text-secondary)] file:mr-4 file:rounded-full file:border-0 file:bg-[rgba(124,58,237,0.18)] file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.18em] file:text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
                       />
+                      {depositProofFile && (
+                        <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+                          Selected: {depositProofFile.name} • {proofFileSizeLabel}
+                        </p>
+                      )}
                     </label>
 
                     <label className="block text-sm text-[var(--text-secondary)]">

@@ -38,6 +38,18 @@ import {
   type SignupTierId,
 } from '../lib/auth'
 import { formatUsd } from '../lib/format'
+import {
+  DEFAULT_LANGUAGE_CODE,
+  LANGUAGE_OPTIONS,
+  normalizeLanguageCode,
+  setStoredLanguageCode,
+} from '../lib/languages'
+import {
+  formatTimeZoneLabel,
+  getTimeZoneOptions,
+  resolvePreferredTimeZone,
+  setStoredTimeZonePreference,
+} from '../lib/timezone'
 import { showToast } from '../lib/toast'
 
 type ProfileTabId =
@@ -60,7 +72,7 @@ const profileTabs: ProfileTab[] = [
   {
     id: 'profile',
     label: 'Profile Details',
-    subtitle: 'Update name and account identity',
+    subtitle: 'Review registered identity and update contact details',
     icon: UserRound,
   },
   {
@@ -221,12 +233,13 @@ export function ProfilePage() {
   const [notificationForm, setNotificationForm] =
     useState<ProfileNotificationSettings>(defaultNotifications)
   const [languageForm, setLanguageForm] = useState({
-    language: 'English',
-    timezone:
-      typeof Intl !== 'undefined'
-        ? Intl.DateTimeFormat().resolvedOptions().timeZone
-        : 'Africa/Lagos',
+    language: 'en',
+    timezone: resolvePreferredTimeZone(),
   })
+  const timeZoneOptions = useMemo(
+    () => getTimeZoneOptions(languageForm.timezone),
+    [languageForm.timezone],
+  )
   const [tierUpgradeModalOpen, setTierUpgradeModalOpen] = useState(false)
   const [tierUpgradeConfig, setTierUpgradeConfig] = useState<SignupConfig | null>(null)
   const [tierUpgradeLoading, setTierUpgradeLoading] = useState(false)
@@ -250,12 +263,8 @@ export function ProfilePage() {
       ...profile.notificationSettings,
     })
     setLanguageForm({
-      language: profile.language || 'English',
-      timezone:
-        profile.timezone ||
-        (typeof Intl !== 'undefined'
-          ? Intl.DateTimeFormat().resolvedOptions().timeZone
-          : 'Africa/Lagos'),
+      language: normalizeLanguageCode(profile.language),
+      timezone: resolvePreferredTimeZone(profile.timezone),
     })
   }, [profile])
 
@@ -284,7 +293,6 @@ export function ProfilePage() {
   async function handleProfileSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await saveProfile({
-      name: profileForm.name.trim(),
       phone: profileForm.phone.trim(),
       country: profileForm.country.trim(),
       bio: profileForm.bio.trim(),
@@ -333,10 +341,37 @@ export function ProfilePage() {
 
   async function handleLanguageSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    await saveProfile({
-      language: languageForm.language,
-      timezone: languageForm.timezone,
+    const languageCode = normalizeLanguageCode(languageForm.language)
+    const timeZone = setStoredTimeZonePreference(languageForm.timezone)
+    const result = await saveProfile({
+      language: languageCode,
+      timezone: timeZone,
     })
+
+    if (result.success) {
+      setStoredLanguageCode(languageCode)
+      setLanguageForm((current) => ({
+        ...current,
+        timezone: timeZone,
+      }))
+    }
+  }
+
+  async function handleSwitchToEnglish() {
+    const timeZone = setStoredTimeZonePreference(languageForm.timezone)
+    const result = await saveProfile({
+      language: DEFAULT_LANGUAGE_CODE,
+      timezone: timeZone,
+    })
+
+    if (result.success) {
+      setStoredLanguageCode(DEFAULT_LANGUAGE_CODE)
+      setLanguageForm((current) => ({
+        ...current,
+        language: DEFAULT_LANGUAGE_CODE,
+        timezone: timeZone,
+      }))
+    }
   }
 
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
@@ -548,26 +583,28 @@ export function ProfilePage() {
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-[var(--border-strong)] bg-[var(--surface-subtle)]">
-              {profile.avatarUrl ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt={`${profile.name} avatar`}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--purple)] to-[var(--blue)] text-base font-semibold text-white">
-                  {userInitials}
-                </div>
-              )}
+            <div className="relative h-20 w-20 shrink-0">
+              <div className="h-full w-full overflow-hidden rounded-full border border-[var(--border-strong)] bg-[var(--surface-subtle)]">
+                {profile.avatarUrl ? (
+                  <img
+                    src={profile.avatarUrl}
+                    alt={`${profile.name} avatar`}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--purple)] to-[var(--blue)] text-base font-semibold text-white">
+                    {userInitials}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-panel)] text-[var(--text-primary)]"
+                className="absolute -bottom-1 -right-1 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[0_10px_24px_rgba(0,0,0,0.28)] ring-2 ring-[var(--surface-panel)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-65"
                 aria-label="Update profile photo"
                 disabled={avatarBusy || isSaving}
               >
-                <Camera className="h-3.5 w-3.5" />
+                <Camera className="h-4 w-4" />
               </button>
               <input
                 ref={fileInputRef}
@@ -578,10 +615,18 @@ export function ProfilePage() {
               />
             </div>
             <div className="min-w-0">
-              <p className="truncate font-display text-2xl font-semibold text-[var(--text-primary)]">
+              <p
+                className="notranslate truncate font-display text-2xl font-semibold text-[var(--text-primary)]"
+                translate="no"
+              >
                 {profile.name}
               </p>
-              <p className="truncate text-sm text-[var(--text-secondary)]">{profile.email}</p>
+              <p
+                className="notranslate truncate text-sm text-[var(--text-secondary)]"
+                translate="no"
+              >
+                {profile.email}
+              </p>
               <p className="mt-1 text-xs text-[var(--text-tertiary)]">{memberLabel}</p>
             </div>
           </div>
@@ -689,8 +734,8 @@ export function ProfilePage() {
             <form onSubmit={handleProfileSave} className="space-y-4">
               <h3 className="font-display text-xl font-semibold text-[var(--text-primary)]">Profile Details</h3>
               <div className="grid gap-4 md:grid-cols-2">
-                <input value={profileForm.name} onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))} placeholder="Full name" className="h-11 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none" />
-                <input value={profile.email} disabled className="h-11 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-panel-strong)] px-3 text-sm text-[var(--text-secondary)] outline-none" />
+                <input value={profileForm.name} disabled translate="no" className="notranslate h-11 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-panel-strong)] px-3 text-sm text-[var(--text-secondary)] outline-none" />
+                <input value={profile.email} disabled translate="no" className="notranslate h-11 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-panel-strong)] px-3 text-sm text-[var(--text-secondary)] outline-none" />
                 <input value={profileForm.phone} onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Phone number" className="h-11 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none" />
                 <input value={profileForm.country} onChange={(event) => setProfileForm((current) => ({ ...current, country: event.target.value }))} placeholder="Country" className="h-11 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none" />
               </div>
@@ -743,13 +788,32 @@ export function ProfilePage() {
           {activeTab === 'language' && (
             <form onSubmit={handleLanguageSave} className="space-y-4">
               <h3 className="font-display text-xl font-semibold text-[var(--text-primary)]">Language & Timezone</h3>
-              <select value={languageForm.language} onChange={(event) => setLanguageForm((current) => ({ ...current, language: event.target.value }))} className="h-11 w-full rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none">
-                {['English', 'French', 'Spanish', 'German', 'Arabic'].map((language) => (
-                  <option key={language} value={language}>{language}</option>
+              <select value={languageForm.language} onChange={(event) => setLanguageForm((current) => ({ ...current, language: event.target.value }))} translate="no" className="notranslate h-11 w-full rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none">
+                {LANGUAGE_OPTIONS.map((language) => (
+                  <option key={language.code} value={language.code} translate="no" className="notranslate">
+                    {language.label} ({language.code}) - {language.nativeLabel}
+                  </option>
                 ))}
               </select>
-              <input value={languageForm.timezone} onChange={(event) => setLanguageForm((current) => ({ ...current, timezone: event.target.value }))} placeholder="Timezone" className="h-11 w-full rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none" />
-              <button disabled={isSaving || isLoading} className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white disabled:opacity-60">{isSaving ? 'Saving...' : 'Save Preferences'}</button>
+              <select value={languageForm.timezone} onChange={(event) => setLanguageForm((current) => ({ ...current, timezone: event.target.value }))} translate="no" className="notranslate h-11 w-full rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-sm text-[var(--text-primary)] outline-none">
+                {timeZoneOptions.map((timeZone) => (
+                  <option key={timeZone} value={timeZone}>
+                    {formatTimeZoneLabel(timeZone)}
+                  </option>
+                ))}
+              </select>
+              <div className="flex flex-wrap items-center gap-3">
+                <button disabled={isSaving || isLoading} className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white disabled:opacity-60">{isSaving ? 'Saving...' : 'Save Preferences'}</button>
+                <button
+                  type="button"
+                  onClick={() => void handleSwitchToEnglish()}
+                  disabled={isSaving || isLoading || languageForm.language === DEFAULT_LANGUAGE_CODE}
+                  translate="no"
+                  className="notranslate inline-flex h-10 items-center rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Use English
+                </button>
+              </div>
             </form>
           )}
 

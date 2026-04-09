@@ -530,7 +530,7 @@ export function WalletPage() {
 
     const times = pendingEntries
       .map((entry) => (entry.occurredAt ? new Date(entry.occurredAt) : null))
-      .filter((date): date is Date => Boolean(date) && !Number.isNaN(date.getTime()))
+      .filter((date): date is Date => date instanceof Date && !Number.isNaN(date.getTime()))
       .map((date) => date.getTime())
 
     if (times.length === 0) {

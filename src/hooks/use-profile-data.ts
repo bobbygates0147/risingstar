@@ -6,6 +6,8 @@ import {
   signOut,
   type AuthUser,
 } from '../lib/auth'
+import { resolveApiMediaUrl } from '../lib/media'
+import { resolvePreferredTimeZone } from '../lib/timezone'
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL?.toString() || 'http://localhost:4000'
@@ -108,18 +110,6 @@ function readNumber(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
-export function resolveApiMediaUrl(value?: string | null) {
-  if (!value || typeof value !== 'string') {
-    return ''
-  }
-
-  if (/^https?:\/\//i.test(value)) {
-    return value
-  }
-
-  return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`
-}
-
 function normalizeNotificationSettings(value: unknown): ProfileNotificationSettings {
   if (!value || typeof value !== 'object') {
     return DEFAULT_NOTIFICATION_SETTINGS
@@ -147,11 +137,7 @@ function buildFallbackProfile(user: AuthUser | null): ProfileData {
     country: user?.country || '',
     bio: user?.bio || '',
     language: user?.language || 'English',
-    timezone:
-      user?.timezone ||
-      (typeof Intl !== 'undefined'
-        ? Intl.DateTimeFormat().resolvedOptions().timeZone
-        : 'Africa/Lagos'),
+    timezone: resolvePreferredTimeZone(user?.timezone),
     avatarUrl: resolveApiMediaUrl(user?.avatarUrl),
     tier: user?.tier || (user?.role === 'admin' ? 'Admin' : 'Tier 1'),
     aiBotEnabled: Boolean(user?.aiBotEnabled),
@@ -175,7 +161,7 @@ function toProfileData(value: unknown, fallback: ProfileData): ProfileData {
     country: readString(source.country, fallback.country),
     bio: readString(source.bio, fallback.bio),
     language: readString(source.language, fallback.language),
-    timezone: readString(source.timezone, fallback.timezone),
+    timezone: resolvePreferredTimeZone(readString(source.timezone, fallback.timezone)),
     avatarUrl: resolveApiMediaUrl(readString(source.avatarUrl, fallback.avatarUrl)),
     tier: readString(source.tier, fallback.tier),
     aiBotEnabled: readBoolean(source.aiBotEnabled, fallback.aiBotEnabled),

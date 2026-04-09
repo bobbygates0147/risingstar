@@ -1,5 +1,11 @@
 import { ART_COVER_ASSETS, MUSIC_COVER_ASSETS } from './asset-catalog'
 import { AD_VIDEO_ASSETS } from './ad-video-catalog'
+import { MUSIC_AUDIO_ASSETS } from './music-audio-catalog'
+import {
+  getAdCatalogProfile,
+  getArtCatalogProfile,
+  getMusicCatalogProfile,
+} from './task-catalog-metadata'
 
 export type TaskType = 'Music' | 'Ads' | 'Art'
 export type TaskStatus = 'available' | 'live' | 'completed'
@@ -34,46 +40,6 @@ export type ActivityEntry = {
 
 const adDummyCovers = ['/images/mc20.jpg', '/images/mc21.webp', '/images/mc22.webp'] as const
 
-const musicArtists = [
-  'Nova Kade',
-  'Zuri Vale',
-  'AYR',
-  'Kairo',
-  'Juno Redd',
-  'Ari Moss',
-  'Nexus Nine',
-  'Luna Shore',
-] as const
-
-const artArtists = [
-  'Mira Sol',
-  'Arlo Muse',
-  'Nia Hart',
-  'Kai Dune',
-  'Rumi Ash',
-  'Lio Voss',
-  'Ana Crest',
-] as const
-
-const musicMoods = [
-  'Synthwave pulse',
-  'Afro-fusion anthem',
-  'Late-night drill',
-  'Soul-pop crossover',
-  'High-energy campaign',
-  'Melodic street vibe',
-] as const
-
-const artMoods = [
-  'Like abstract showcase',
-  'Like modern gallery post',
-  'Curated visual drop',
-  'Studio color study',
-  'Concept portrait set',
-] as const
-
-const adMoods = ['Sponsored ad clip', 'Product ad clip', 'Brand promo clip'] as const
-
 function pad2(value: number) {
   return String(value).padStart(2, '0')
 }
@@ -103,19 +69,28 @@ function engagementFromIndex(index: number) {
 }
 
 function buildMusicTasks(): RewardTask[] {
-  return MUSIC_COVER_ASSETS.map((coverImage, index) => {
+  const musicCount = Math.max(MUSIC_COVER_ASSETS.length, MUSIC_AUDIO_ASSETS.length)
+
+  return Array.from({ length: musicCount }).map((_, index) => {
     const trackNo = index + 1
+    const profile = getMusicCatalogProfile(index)
+    const coverImage = MUSIC_COVER_ASSETS[index % MUSIC_COVER_ASSETS.length]
+    const mediaUrl =
+      MUSIC_AUDIO_ASSETS.length > 0
+        ? MUSIC_AUDIO_ASSETS[index % MUSIC_AUDIO_ASSETS.length]
+        : undefined
 
     return {
       id: `music-${trackNo}`,
-      title: `music${trackNo}`,
-      artist: musicArtists[index % musicArtists.length],
+      title: profile.title,
+      artist: profile.artist,
       duration: secondsToDuration(30 + ((index % 5) * 6 + 6)),
       reward: Number((0.62 + (index % 8) * 0.04).toFixed(2)),
       type: 'Music',
       status: statusFromIndex(index),
-      mood: musicMoods[index % musicMoods.length],
+      mood: profile.mood,
       coverImage,
+      mediaUrl,
       reach: reachFromIndex(index),
       engagement: engagementFromIndex(index + 5),
     }
@@ -126,16 +101,17 @@ function buildArtTasks(startIndex: number): RewardTask[] {
   return ART_COVER_ASSETS.map((coverImage, index) => {
     const artNo = index + 1
     const globalIndex = startIndex + index
+    const profile = getArtCatalogProfile(index)
 
     return {
       id: `art-${artNo}`,
-      title: `Art Session ${artNo}`,
-      artist: artArtists[index % artArtists.length],
+      title: profile.title,
+      artist: profile.artist,
       duration: secondsToDuration(16 + ((index % 4) * 4 + 2)),
       reward: Number((0.45 + (index % 7) * 0.05).toFixed(2)),
       type: 'Art',
       status: statusFromIndex(globalIndex),
-      mood: artMoods[index % artMoods.length],
+      mood: profile.mood,
       coverImage,
       reach: reachFromIndex(globalIndex),
       engagement: engagementFromIndex(globalIndex + 3),
@@ -149,6 +125,7 @@ function buildAdTasks(startIndex: number): RewardTask[] {
   return Array.from({ length: adCount }).map((_, index) => {
     const adNo = index + 1
     const globalIndex = startIndex + index
+    const profile = getAdCatalogProfile(index)
     const mediaUrl =
       AD_VIDEO_ASSETS.length > 0
         ? AD_VIDEO_ASSETS[index % AD_VIDEO_ASSETS.length]
@@ -156,13 +133,13 @@ function buildAdTasks(startIndex: number): RewardTask[] {
 
     return {
       id: `ad-${adNo}`,
-      title: `Sponsored Slot ${adNo}`,
-      artist: 'Brand Partner',
+      title: profile.title,
+      artist: profile.artist,
       duration: secondsToDuration(15 + (index % 3) * 5),
       reward: Number((0.45 + (index % 4) * 0.08).toFixed(2)),
       type: 'Ads',
       status: statusFromIndex(globalIndex),
-      mood: adMoods[index % adMoods.length],
+      mood: profile.mood,
       coverImage: adDummyCovers[index % adDummyCovers.length],
       mediaUrl,
       reach: reachFromIndex(globalIndex),

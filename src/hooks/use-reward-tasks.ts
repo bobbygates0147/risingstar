@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { AD_VIDEO_ASSETS } from '../data/ad-video-catalog'
 import { MUSIC_AUDIO_ASSETS } from '../data/music-audio-catalog'
 import { rewardTasks as fallbackTasks, type RewardTask } from '../data/platform-data'
+import {
+  resolveTaskArtist,
+  resolveTaskMood,
+  resolveTaskTitle,
+} from '../data/task-catalog-metadata'
 import { isAIBotAutomationActiveForUser } from '../lib/ai-bot-state'
 import {
   canAccessAdTasks,
@@ -211,30 +216,6 @@ function sanitizeMediaUrl(value: string) {
   return cleanValue
 }
 
-function resolveMusicTitleIndex(taskKey: string, fallbackTitle: string) {
-  const idMatch = /music[-_ ]?(\d+)/i.exec(taskKey)
-  if (idMatch) {
-    return Number.parseInt(idMatch[1] ?? '', 10)
-  }
-
-  const titleMatch = /(\d+)/.exec(fallbackTitle)
-  if (titleMatch) {
-    return Number.parseInt(titleMatch[1] ?? '', 10)
-  }
-
-  return Number.NaN
-}
-
-function normalizeMusicTitle(taskKey: string, fallbackTitle: string) {
-  const index = resolveMusicTitleIndex(taskKey, fallbackTitle)
-
-  if (!Number.isFinite(index) || index <= 0) {
-    return 'music'
-  }
-
-  return `music${index}`
-}
-
 function secondsToDurationLabel(totalSeconds: number) {
   const safeSeconds = Math.max(Math.round(totalSeconds), 1)
   const minutes = Math.floor(safeSeconds / 60)
@@ -370,18 +351,17 @@ function toRewardTask(value: unknown): RewardTask | null {
       ? sanitizeMediaUrl(item.mediaUrl)
       : undefined
 
+  const title = resolveTaskTitle(item.type, item.id, item.title)
+
   return {
     id: item.id,
-    title:
-      item.type === 'Music'
-        ? normalizeMusicTitle(item.id, item.title)
-        : item.title,
-    artist: item.artist,
+    title,
+    artist: resolveTaskArtist(item.type, item.id, item.title, item.artist),
     duration: item.duration,
     reward,
     type: item.type,
     status: item.status,
-    mood: item.mood,
+    mood: resolveTaskMood(item.type, item.id, item.title, item.mood),
     coverImage: sanitizeCoverImage(item.type, item.id, item.coverImage),
     mediaUrl,
     reach: item.reach,
@@ -799,11 +779,15 @@ function buildPersonalizedQueue(
       ...baseTask,
       sourceTaskId: baseTask.id,
       id: sessionId,
-      title:
-        baseTask.type === 'Music'
-          ? normalizeMusicTitle(baseTask.id, baseTask.title)
-          : baseTask.title,
+      title: resolveTaskTitle(baseTask.type, baseTask.id, baseTask.title),
+      artist: resolveTaskArtist(
+        baseTask.type,
+        baseTask.id,
+        baseTask.title,
+        baseTask.artist,
+      ),
       status: isCompleted ? 'completed' : 'available',
+      mood: resolveTaskMood(baseTask.type, baseTask.id, baseTask.title, baseTask.mood),
       reward: resolveRewardForTier(baseTask.reward, scope.tierId),
       duration: durationFromMedia ?? normalizedDuration,
       reach: buildExponentialReach(baseTask.reach, reachClickCount),

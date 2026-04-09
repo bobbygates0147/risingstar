@@ -49,10 +49,9 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
   },
   Ads: {
     heading: 'Sponsored Ad Task',
-    subtitle:
-      'Using image placeholder mode until your real ad clips are uploaded.',
-    actionHint: 'Dummy sponsor session',
-    actionLabel: 'Preview placeholder ad',
+    subtitle: 'Watch the sponsored clip from start to finish to unlock your reward.',
+    actionHint: 'Sponsor session',
+    actionLabel: 'Play full sponsor clip',
     mode: 'video',
     icon: Clapperboard,
     badgeClassName:
@@ -60,9 +59,9 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
     ctaClassName:
       'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-[0_20px_45px_rgba(251,146,60,0.35)]',
     rules: [
-      'Ad clip is currently a placeholder image',
-      'Real playback checks will be enabled later',
-      'Use this task as layout and flow preview',
+      'Watch the sponsor creative in full',
+      'Keep this tab active until complete',
+      'Do not skip before validation ends',
     ],
   },
   Art: {
@@ -247,7 +246,7 @@ export function TaskPlayerPage() {
       : task.type === 'Ads'
       ? canPlayAdVideo
         ? 'Watch the sponsor clip from start to finish with active focus.'
-        : 'Using image placeholder mode until ad clips are ready.'
+        : 'Sponsor creative is being prepared for this session.'
       : task.type === 'Music'
         ? hasMusicMedia
           ? 'Press play and keep audio running until timer reaches zero.'
@@ -259,7 +258,7 @@ export function TaskPlayerPage() {
       : task?.type === 'Ads'
       ? canPlayAdVideo
         ? 'Sponsor session'
-        : 'Dummy sponsor session'
+        : 'Sponsor session'
       : config?.actionHint || 'Active session'
   const actionLabel =
     isTimeLocked
@@ -267,7 +266,7 @@ export function TaskPlayerPage() {
       : task?.type === 'Ads'
       ? canPlayAdVideo
         ? 'Play full ad video'
-        : 'Preview placeholder ad'
+        : 'Preview sponsor creative'
       : task?.type === 'Music'
         ? 'Play music and stay active'
       : config?.actionLabel || 'Start session'
@@ -795,7 +794,7 @@ export function TaskPlayerPage() {
                     <div className="absolute bottom-16 right-4 rounded-xl border border-white/20 bg-black/35 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">
                       {isTimeLocked
                         ? `Unlocks ${task.unlockLabel || 'later'}`
-                        : 'Dummy ad image'}
+                        : 'Sponsor preview'}
                     </div>
                   </>
                 )
@@ -933,7 +932,7 @@ export function TaskPlayerPage() {
                   ? `This sponsor task is locked until ${task.unlockLabel || 'later today'}.`
                   : canPlayAdVideo
                   ? 'Play the ad from start to finish. Seeking, tab switches, or muted playback can invalidate reward eligibility.'
-                  : 'Real ad clips are not connected yet. This is currently image-only preview mode for task UI and rewards flow.'}
+                  : 'This sponsor creative is queued in image preview mode for task validation.'}
               </p>
             </div>
           ) : isMusicSession ? (

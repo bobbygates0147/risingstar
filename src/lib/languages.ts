@@ -1,0 +1,169 @@
+export const LANGUAGE_STORAGE_KEY = 'rising-star-language'
+export const LANGUAGE_CHANGED_EVENT = 'rising-star:language-changed'
+export const DEFAULT_LANGUAGE_CODE = 'en'
+
+export type LanguageOption = {
+  code: string
+  label: string
+  nativeLabel: string
+}
+
+export const LANGUAGE_OPTIONS: readonly LanguageOption[] = [
+  { code: 'en', label: 'English', nativeLabel: 'English' },
+  { code: 'af', label: 'Afrikaans', nativeLabel: 'Afrikaans' },
+  { code: 'sq', label: 'Albanian', nativeLabel: 'Shqip' },
+  { code: 'am', label: 'Amharic', nativeLabel: 'Amharic' },
+  { code: 'ar', label: 'Arabic', nativeLabel: 'العربية' },
+  { code: 'hy', label: 'Armenian', nativeLabel: 'Հայերեն' },
+  { code: 'az', label: 'Azerbaijani', nativeLabel: 'Azərbaycanca' },
+  { code: 'eu', label: 'Basque', nativeLabel: 'Euskara' },
+  { code: 'be', label: 'Belarusian', nativeLabel: 'Беларуская' },
+  { code: 'bn', label: 'Bengali', nativeLabel: 'বাংলা' },
+  { code: 'bg', label: 'Bulgarian', nativeLabel: 'Български' },
+  { code: 'ca', label: 'Catalan', nativeLabel: 'Català' },
+  { code: 'ceb', label: 'Cebuano', nativeLabel: 'Cebuano' },
+  { code: 'ny', label: 'Chichewa', nativeLabel: 'Chichewa' },
+  { code: 'zh-CN', label: 'Chinese Simplified', nativeLabel: '简体中文' },
+  { code: 'zh-TW', label: 'Chinese Traditional', nativeLabel: '繁體中文' },
+  { code: 'co', label: 'Corsican', nativeLabel: 'Corsu' },
+  { code: 'hr', label: 'Croatian', nativeLabel: 'Hrvatski' },
+  { code: 'cs', label: 'Czech', nativeLabel: 'Čeština' },
+  { code: 'da', label: 'Danish', nativeLabel: 'Dansk' },
+  { code: 'nl', label: 'Dutch', nativeLabel: 'Nederlands' },
+  { code: 'eo', label: 'Esperanto', nativeLabel: 'Esperanto' },
+  { code: 'et', label: 'Estonian', nativeLabel: 'Eesti' },
+  { code: 'tl', label: 'Filipino', nativeLabel: 'Filipino' },
+  { code: 'fi', label: 'Finnish', nativeLabel: 'Suomi' },
+  { code: 'fr', label: 'French', nativeLabel: 'Français' },
+  { code: 'fy', label: 'Frisian', nativeLabel: 'Frysk' },
+  { code: 'gl', label: 'Galician', nativeLabel: 'Galego' },
+  { code: 'ka', label: 'Georgian', nativeLabel: 'ქართული' },
+  { code: 'de', label: 'German', nativeLabel: 'Deutsch' },
+  { code: 'el', label: 'Greek', nativeLabel: 'Ελληνικά' },
+  { code: 'gu', label: 'Gujarati', nativeLabel: 'ગુજરાતી' },
+  { code: 'ht', label: 'Haitian Creole', nativeLabel: 'Kreyòl ayisyen' },
+  { code: 'ha', label: 'Hausa', nativeLabel: 'Hausa' },
+  { code: 'haw', label: 'Hawaiian', nativeLabel: 'Hawaiian' },
+  { code: 'iw', label: 'Hebrew', nativeLabel: 'עברית' },
+  { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी' },
+  { code: 'hmn', label: 'Hmong', nativeLabel: 'Hmong' },
+  { code: 'hu', label: 'Hungarian', nativeLabel: 'Magyar' },
+  { code: 'is', label: 'Icelandic', nativeLabel: 'Íslenska' },
+  { code: 'ig', label: 'Igbo', nativeLabel: 'Igbo' },
+  { code: 'id', label: 'Indonesian', nativeLabel: 'Bahasa Indonesia' },
+  { code: 'ga', label: 'Irish', nativeLabel: 'Gaeilge' },
+  { code: 'it', label: 'Italian', nativeLabel: 'Italiano' },
+  { code: 'ja', label: 'Japanese', nativeLabel: '日本語' },
+  { code: 'jw', label: 'Javanese', nativeLabel: 'Basa Jawa' },
+  { code: 'kn', label: 'Kannada', nativeLabel: 'ಕನ್ನಡ' },
+  { code: 'kk', label: 'Kazakh', nativeLabel: 'Қазақ тілі' },
+  { code: 'km', label: 'Khmer', nativeLabel: 'ខ្មែរ' },
+  { code: 'ko', label: 'Korean', nativeLabel: '한국어' },
+  { code: 'ku', label: 'Kurdish', nativeLabel: 'Kurdî' },
+  { code: 'ky', label: 'Kyrgyz', nativeLabel: 'Кыргызча' },
+  { code: 'lo', label: 'Lao', nativeLabel: 'ລາວ' },
+  { code: 'la', label: 'Latin', nativeLabel: 'Latina' },
+  { code: 'lv', label: 'Latvian', nativeLabel: 'Latviešu' },
+  { code: 'lt', label: 'Lithuanian', nativeLabel: 'Lietuvių' },
+  { code: 'lb', label: 'Luxembourgish', nativeLabel: 'Lëtzebuergesch' },
+  { code: 'mk', label: 'Macedonian', nativeLabel: 'Македонски' },
+  { code: 'mg', label: 'Malagasy', nativeLabel: 'Malagasy' },
+  { code: 'ms', label: 'Malay', nativeLabel: 'Bahasa Melayu' },
+  { code: 'ml', label: 'Malayalam', nativeLabel: 'മലയാളം' },
+  { code: 'mt', label: 'Maltese', nativeLabel: 'Malti' },
+  { code: 'mi', label: 'Maori', nativeLabel: 'Māori' },
+  { code: 'mr', label: 'Marathi', nativeLabel: 'मराठी' },
+  { code: 'mn', label: 'Mongolian', nativeLabel: 'Монгол' },
+  { code: 'my', label: 'Myanmar', nativeLabel: 'မြန်မာ' },
+  { code: 'ne', label: 'Nepali', nativeLabel: 'नेपाली' },
+  { code: 'no', label: 'Norwegian', nativeLabel: 'Norsk' },
+  { code: 'ps', label: 'Pashto', nativeLabel: 'پښتو' },
+  { code: 'fa', label: 'Persian', nativeLabel: 'فارسی' },
+  { code: 'pl', label: 'Polish', nativeLabel: 'Polski' },
+  { code: 'pt', label: 'Portuguese', nativeLabel: 'Português' },
+  { code: 'pa', label: 'Punjabi', nativeLabel: 'ਪੰਜਾਬੀ' },
+  { code: 'ro', label: 'Romanian', nativeLabel: 'Română' },
+  { code: 'ru', label: 'Russian', nativeLabel: 'Русский' },
+  { code: 'sm', label: 'Samoan', nativeLabel: 'Gagana Samoa' },
+  { code: 'gd', label: 'Scots Gaelic', nativeLabel: 'Gàidhlig' },
+  { code: 'sr', label: 'Serbian', nativeLabel: 'Српски' },
+  { code: 'st', label: 'Sesotho', nativeLabel: 'Sesotho' },
+  { code: 'sn', label: 'Shona', nativeLabel: 'Shona' },
+  { code: 'sd', label: 'Sindhi', nativeLabel: 'سنڌي' },
+  { code: 'si', label: 'Sinhala', nativeLabel: 'සිංහල' },
+  { code: 'sk', label: 'Slovak', nativeLabel: 'Slovenčina' },
+  { code: 'sl', label: 'Slovenian', nativeLabel: 'Slovenščina' },
+  { code: 'so', label: 'Somali', nativeLabel: 'Soomaali' },
+  { code: 'es', label: 'Spanish', nativeLabel: 'Español' },
+  { code: 'su', label: 'Sundanese', nativeLabel: 'Basa Sunda' },
+  { code: 'sw', label: 'Swahili', nativeLabel: 'Kiswahili' },
+  { code: 'sv', label: 'Swedish', nativeLabel: 'Svenska' },
+  { code: 'tg', label: 'Tajik', nativeLabel: 'Тоҷикӣ' },
+  { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்' },
+  { code: 'te', label: 'Telugu', nativeLabel: 'తెలుగు' },
+  { code: 'th', label: 'Thai', nativeLabel: 'ไทย' },
+  { code: 'tr', label: 'Turkish', nativeLabel: 'Türkçe' },
+  { code: 'uk', label: 'Ukrainian', nativeLabel: 'Українська' },
+  { code: 'ur', label: 'Urdu', nativeLabel: 'اردو' },
+  { code: 'uz', label: 'Uzbek', nativeLabel: 'Oʻzbekcha' },
+  { code: 'vi', label: 'Vietnamese', nativeLabel: 'Tiếng Việt' },
+  { code: 'cy', label: 'Welsh', nativeLabel: 'Cymraeg' },
+  { code: 'xh', label: 'Xhosa', nativeLabel: 'IsiXhosa' },
+  { code: 'yi', label: 'Yiddish', nativeLabel: 'ייִדיש' },
+  { code: 'yo', label: 'Yoruba', nativeLabel: 'Yorùbá' },
+  { code: 'zu', label: 'Zulu', nativeLabel: 'IsiZulu' },
+]
+
+const LANGUAGE_CODE_SET = new Set(LANGUAGE_OPTIONS.map((option) => option.code))
+const LANGUAGE_NAME_TO_CODE = new Map(
+  LANGUAGE_OPTIONS.flatMap((option) => [
+    [option.code.toLowerCase(), option.code],
+    [option.label.toLowerCase(), option.code],
+    [option.nativeLabel.toLowerCase(), option.code],
+  ]),
+)
+
+export function normalizeLanguageCode(value?: string | null) {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return DEFAULT_LANGUAGE_CODE
+  }
+
+  if (LANGUAGE_CODE_SET.has(normalized)) {
+    return normalized
+  }
+
+  const lower = normalized.toLowerCase()
+  return LANGUAGE_NAME_TO_CODE.get(lower) || DEFAULT_LANGUAGE_CODE
+}
+
+export function getLanguageOption(value?: string | null) {
+  const code = normalizeLanguageCode(value)
+  return LANGUAGE_OPTIONS.find((option) => option.code === code) || LANGUAGE_OPTIONS[0]
+}
+
+export function getStoredLanguageCode() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LANGUAGE_CODE
+  }
+
+  return normalizeLanguageCode(window.localStorage.getItem(LANGUAGE_STORAGE_KEY))
+}
+
+export function setStoredLanguageCode(value: string) {
+  const code = normalizeLanguageCode(value)
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = code
+  }
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, code)
+    window.dispatchEvent(new CustomEvent(LANGUAGE_CHANGED_EVENT, { detail: { code } }))
+  }
+
+  return code
+}
+
+export function getGoogleTranslateLanguageList() {
+  return LANGUAGE_OPTIONS.map((option) => option.code).join(',')
+}

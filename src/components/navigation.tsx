@@ -19,11 +19,22 @@ import {
 } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useRewardTasks } from '../hooks/use-reward-tasks'
-import { getAuthenticatedUser, isAdmin, signOut } from '../lib/auth'
+import {
+  AUTH_USER_UPDATED_EVENT,
+  getAuthenticatedUser,
+  isAdmin,
+  signOut,
+  type AuthUser,
+} from '../lib/auth'
 import {
   isAIBotDisplayActiveForUser,
 } from '../lib/ai-bot-state'
+import { resolveApiMediaUrl } from '../lib/media'
 import { getNextQueuedTask, getReadyTaskCount } from '../lib/task-queue'
+import {
+  getShortTimeZoneName,
+  resolvePreferredTimeZone,
+} from '../lib/timezone'
 
 type NavigationItem = {
   label: string
@@ -70,6 +81,66 @@ function getUserInitials(name: string, email: string) {
   return source.slice(0, 2).toUpperCase()
 }
 
+function UserAvatar({
+  avatarUrl,
+  className,
+  email,
+  name,
+}: {
+  avatarUrl?: string
+  className?: string
+  email: string
+  name: string
+}) {
+  const resolvedAvatarUrl = resolveApiMediaUrl(avatarUrl)
+  const [imageFailed, setImageFailed] = useState(false)
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [resolvedAvatarUrl])
+
+  return (
+    <span
+      translate="no"
+      className={clsx(
+        'notranslate flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--glow)] to-[var(--blue)] font-semibold text-white',
+        className,
+      )}
+    >
+      {resolvedAvatarUrl && !imageFailed ? (
+        <img
+          src={resolvedAvatarUrl}
+          alt={`${name} profile photo`}
+          className="h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        getUserInitials(name, email)
+      )}
+    </span>
+  )
+}
+
+function useAuthenticatedUserSnapshot() {
+  const [user, setUser] = useState<AuthUser | null>(() => getAuthenticatedUser())
+
+  useEffect(() => {
+    function syncUser() {
+      setUser(getAuthenticatedUser())
+    }
+
+    window.addEventListener(AUTH_USER_UPDATED_EVENT, syncUser)
+    window.addEventListener('storage', syncUser)
+
+    return () => {
+      window.removeEventListener(AUTH_USER_UPDATED_EVENT, syncUser)
+      window.removeEventListener('storage', syncUser)
+    }
+  }, [])
+
+  return user
+}
+
 type SidebarContentProps = {
   collapsed: boolean
   onItemSelect?: () => void
@@ -104,7 +175,7 @@ function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
   const navigationItems = getNavigationItems()
   const navigate = useNavigate()
   const adminView = isAdmin()
-  const user = getAuthenticatedUser()
+  const user = useAuthenticatedUserSnapshot()
   const [pulseNowMs, setPulseNowMs] = useState(() => Date.now())
   const aiBotActive = useMemo(
     () =>
@@ -220,8 +291,8 @@ function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
                     className={clsx(
                       'mt-3 inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition',
                       aiBotActive
-                        ? 'bot-activated-pulse border-[rgba(167,139,250,0.66)] bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_0_0_1px_rgba(167,139,250,0.42)]'
-                        : 'border-transparent bg-[var(--button-primary-bg)] text-[var(--button-primary-text)] hover:bg-[var(--button-primary-hover)]',
+                        ? 'ai-bot-button ai-bot-button--active bot-activated-pulse'
+                        : 'ai-bot-button ai-bot-button--inactive',
                     )}
                   >
                     {botButtonLabel}
@@ -239,8 +310,8 @@ function SidebarContent({ collapsed, onItemSelect }: SidebarContentProps) {
                     className={clsx(
                       'inline-flex h-9 w-9 items-center justify-center rounded-xl border transition',
                       aiBotActive
-                        ? 'bot-activated-pulse border-[rgba(167,139,250,0.66)] bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_0_0_1px_rgba(167,139,250,0.42)]'
-                        : 'border-transparent bg-[var(--button-primary-bg)] text-[var(--button-primary-text)] hover:bg-[var(--button-primary-hover)]',
+                        ? 'ai-bot-button ai-bot-button--active bot-activated-pulse'
+                        : 'ai-bot-button ai-bot-button--inactive',
                     )}
                     aria-label="Activate AI Bot"
                   >
@@ -324,12 +395,11 @@ export function TopNavbar({
   const [accountOpen, setAccountOpen] = useState(false)
   const accountMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  const user = getAuthenticatedUser()
+  const user = useAuthenticatedUserSnapshot()
   const userName = user?.name || 'Rising Star User'
   const userEmail = user?.email || 'user@risingstar.app'
   const userTier = user?.tier || (user?.role === 'admin' ? 'Admin' : 'Tier 1')
   const userBadge = user?.role === 'admin' ? 'Admin' : 'Verified'
-  const userInitials = getUserInitials(userName, userEmail)
   const isAdminUser = user?.role === 'admin'
   const [pulseNowMs, setPulseNowMs] = useState(() => Date.now())
   const { tasks: rewardTasks } = useRewardTasks()
@@ -346,20 +416,25 @@ export function TopNavbar({
     [pulseNowMs, user],
   )
   const aiBotButtonText = aiBotActive ? 'Bot Activated' : 'Activate Bot'
+  const userTimeZone = useMemo(
+    () => resolvePreferredTimeZone(user?.timezone),
+    [user?.timezone],
+  )
   const dailyPulseText = useMemo(() => {
     if (isAdminUser) {
       return 'Admin mode'
     }
 
     if (nextQueuedTask) {
-      const label = new Intl.DateTimeFormat('en-NG', {
+      const label = new Intl.DateTimeFormat(undefined, {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
-        timeZone: 'Africa/Lagos',
+        timeZone: userTimeZone,
       }).format(nextQueuedTask.unlockAt)
+      const timeZoneName = getShortTimeZoneName(nextQueuedTask.unlockAt, userTimeZone)
 
-      return `Queue opens ${label} WAT`
+      return `Queue opens ${label} ${timeZoneName}`
     }
 
     if (readyTaskCount > 0) {
@@ -367,7 +442,7 @@ export function TopNavbar({
     }
 
     return 'Queue completed for today'
-  }, [isAdminUser, nextQueuedTask, readyTaskCount])
+  }, [isAdminUser, nextQueuedTask, readyTaskCount, userTimeZone])
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -465,8 +540,8 @@ export function TopNavbar({
               className={clsx(
                 'relative hidden h-11 items-center gap-2 overflow-hidden rounded-2xl border px-4 text-sm font-semibold transition sm:inline-flex',
                 aiBotActive
-                  ? 'bot-activated-pulse border-[rgba(167,139,250,0.72)] bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_0_0_1px_rgba(167,139,250,0.45)]'
-                  : 'border-transparent bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-white shadow-[0_14px_30px_rgba(124,58,237,0.26)] hover:brightness-110',
+                  ? 'ai-bot-button ai-bot-button--active bot-activated-pulse'
+                  : 'ai-bot-button ai-bot-button--inactive',
               )}
             >
               <Bot className="h-4 w-4" />
@@ -503,9 +578,12 @@ export function TopNavbar({
               aria-haspopup="menu"
               aria-label="Open account menu"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--glow)] to-[var(--blue)] text-sm font-semibold text-white">
-                {userInitials}
-              </div>
+              <UserAvatar
+                avatarUrl={user?.avatarUrl}
+                className="h-9 w-9 rounded-2xl text-sm"
+                email={userEmail}
+                name={userName}
+              />
             </button>
 
             <div
@@ -518,14 +596,23 @@ export function TopNavbar({
             >
               <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--glow)] to-[var(--blue)] text-base font-semibold text-white">
-                    {userInitials}
-                  </div>
+                  <UserAvatar
+                    avatarUrl={user?.avatarUrl}
+                    className="h-12 w-12 rounded-2xl text-base"
+                    email={userEmail}
+                    name={userName}
+                  />
                   <div className="min-w-0">
-                    <p className="truncate font-display text-lg font-semibold text-[var(--text-primary)]">
+                    <p
+                      className="notranslate truncate font-display text-lg font-semibold text-[var(--text-primary)]"
+                      translate="no"
+                    >
                       {userName}
                     </p>
-                    <p className="truncate text-sm text-[var(--text-secondary)]">
+                    <p
+                      className="notranslate truncate text-sm text-[var(--text-secondary)]"
+                      translate="no"
+                    >
                       {userEmail}
                     </p>
                   </div>

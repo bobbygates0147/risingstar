@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/app-shell'
 import { GlobalToast } from './components/global-toast'
 import { GlobalRouteLoader } from './components/global-route-loader'
+import { GlobalLanguageTranslator } from './components/global-language-translator'
 import { isAdmin, isAuthenticated } from './lib/auth'
 import { ActivityPage } from './pages/activity-page'
 import { AdminPanelPage } from './pages/admin-panel-page'
@@ -48,6 +49,7 @@ function App() {
   return (
     <>
       <ScrollToTopOnRouteChange />
+      <GlobalLanguageTranslator />
       <GlobalRouteLoader />
       <GlobalToast />
       <Routes>

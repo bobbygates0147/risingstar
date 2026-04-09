@@ -1,7 +1,9 @@
 import { getDefaultCryptoWalletInstructions } from './crypto-wallets'
+import { getBrowserTimeZone } from './timezone'
 
 const AUTH_TOKEN_KEY = 'rising-star-auth-token'
 const AUTH_USER_KEY = 'rising-star-auth-user'
+export const AUTH_USER_UPDATED_EVENT = 'rising-star:auth-user-updated'
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL?.toString() || 'http://localhost:4000'
@@ -93,6 +95,7 @@ export type SignupPayload = {
   paymentMethod: SignupPaymentMethod
   paymentReference: string
   paymentAmountUsd: number
+  timezone?: string
 }
 
 const fallbackSignupConfig: SignupConfig = {
@@ -144,6 +147,7 @@ function setAuthSession(payload: AuthResponse) {
 
   storage.setItem(AUTH_TOKEN_KEY, payload.token)
   storage.setItem(AUTH_USER_KEY, JSON.stringify(payload.user))
+  window.dispatchEvent(new CustomEvent(AUTH_USER_UPDATED_EVENT))
 }
 
 function clearAuthSession() {
@@ -155,6 +159,7 @@ function clearAuthSession() {
 
   storage.removeItem(AUTH_TOKEN_KEY)
   storage.removeItem(AUTH_USER_KEY)
+  window.dispatchEvent(new CustomEvent(AUTH_USER_UPDATED_EVENT))
 }
 
 export function getAuthToken() {
@@ -287,6 +292,7 @@ export async function signup(payload: SignupPayload) {
     paymentMethod: payload.paymentMethod,
     paymentReference: payload.paymentReference,
     paymentAmountUsd: payload.paymentAmountUsd.toFixed(2),
+    timezone: payload.timezone || getBrowserTimeZone(),
   })
 }
 

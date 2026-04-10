@@ -84,7 +84,7 @@ const profileTabs: ProfileTab[] = [
   {
     id: 'payment',
     label: 'Payment Methods',
-    subtitle: 'Manage wallet deposit and withdrawals',
+    subtitle: 'Manage wallet withdrawals',
     icon: Wallet,
   },
   {
@@ -759,7 +759,7 @@ export function ProfilePage() {
           {activeTab === 'payment' && (
             <div className="space-y-3">
               <h3 className="font-display text-xl font-semibold text-[var(--text-primary)]">Payment Methods</h3>
-              <p className="text-sm text-[var(--text-secondary)]">Deposit and withdrawal methods are managed from Wallet.</p>
+              <p className="text-sm text-[var(--text-secondary)]">Withdrawal methods are managed from Wallet.</p>
               <Link to="/wallet" className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
                 Open Wallet
                 <ChevronRight className="h-4 w-4" />
@@ -843,7 +843,7 @@ export function ProfilePage() {
 
       {tierUpgradeModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
-          <div className="surface-glow w-full max-w-2xl rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-5 shadow-[var(--shadow-popup)]">
+          <div className="surface-glow w-full max-w-2xl max-h-[calc(100vh-4rem)] overflow-y-auto rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-5 shadow-[var(--shadow-popup)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">

@@ -32,7 +32,7 @@ export type RewardTask = {
 export type ActivityEntry = {
   id: string
   label: string
-  category: 'Music' | 'Ads' | 'Art' | 'Deposit'
+  category: 'Music' | 'Ads' | 'Art'
   amount: number
   time: string
   detail: string

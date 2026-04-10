@@ -40,7 +40,7 @@ const pageMeta: Record<string, { title: string; description: string }> = {
   },
   '/wallet': {
     title: 'Wallet',
-    description: 'Manage deposits, withdrawals, and your payout history.',
+    description: 'Manage withdrawals and your payout history.',
   },
   '/activity': {
     title: 'Activity',

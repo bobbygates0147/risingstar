@@ -1,7 +1,6 @@
 import clsx from 'clsx'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowDownLeft,
   ArrowUpRight,
   Clapperboard,
   Crown,
@@ -83,13 +82,6 @@ function getActivityVisual(kind: ActivityLogKind): ActivityVisualConfig {
     return {
       icon: Crown,
       iconClassName: 'bg-[rgba(251,191,36,0.18)] text-amber-300',
-    }
-  }
-
-  if (kind === 'deposit') {
-    return {
-      icon: ArrowDownLeft,
-      iconClassName: 'bg-[rgba(16,185,129,0.18)] text-emerald-300',
     }
   }
 

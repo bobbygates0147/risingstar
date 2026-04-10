@@ -32,9 +32,7 @@ export type AuthUser = {
   }
   walletBalance?: number
   withdrawableBalance?: number
-  depositTotalUsd?: number
-  extraTaskSlots?: number
-  lastDepositAt?: string | null
+  taskCredits?: number
   tier?: string
   streak?: number
   registrationFeeUsd?: number

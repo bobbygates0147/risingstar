@@ -667,7 +667,7 @@ export function TopNavbar({
                           Wallet
                         </span>
                         <span className="block text-xs text-[var(--text-tertiary)]">
-                          Deposits, withdrawals and payout history
+                          Withdrawals and payout history
                         </span>
                       </span>
                     </Link>

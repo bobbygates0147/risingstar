@@ -188,11 +188,11 @@ export function DashboardPage() {
                   Withdraw
                 </button>
                 <Link
-                  to="/wallet?modal=deposit"
+                  to="/tasks"
                   className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110"
                 >
                   <ArrowDownLeft className="h-4 w-4" />
-                  Deposit
+                  Buy task packs
                 </Link>
               </div>
             </div>
@@ -259,8 +259,7 @@ export function DashboardPage() {
               />
             </div>
             <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              Reach the next deposit threshold to unlock higher daily rewards
-              and faster queue rotation.
+              Upgrade tiers or buy task packs to expand your daily queue and rewards.
             </p>
           </div>
 
@@ -375,13 +374,13 @@ export function DashboardPage() {
             </Link>
 
             <Link
-              to="/wallet?modal=deposit"
+              to="/tasks"
               className="flex w-full items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
               <div>
-                <p className="font-medium text-[var(--text-primary)]">Deposit</p>
+                <p className="font-medium text-[var(--text-primary)]">Buy task packs</p>
                 <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Add USD to unlock more daily tasks
+                  Purchase credits to keep completing tasks
                 </p>
               </div>
               <Wallet className="h-5 w-5 text-[var(--blue)]" />

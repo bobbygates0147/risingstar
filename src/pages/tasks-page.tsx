@@ -7,14 +7,21 @@ import {
   Play,
   Radio,
   Sparkles,
+  Copy,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PaginationControls } from '../components/pagination-controls'
 import { TaskCoverImage } from '../components/task-cover-image'
 import { type TaskType } from '../data/platform-data'
 import { useRewardTasks } from '../hooks/use-reward-tasks'
-import { canAccessAdTasks, getAuthenticatedUser } from '../lib/auth'
+import {
+  canAccessAdTasks,
+  getAuthenticatedUser,
+  getAuthorizedHeaders,
+  refreshAuthenticatedUser,
+  fetchSignupConfig,
+} from '../lib/auth'
 import {
   getAIBotLocalState,
   isAIBotAutomationActiveForUser,
@@ -23,6 +30,47 @@ import { formatUsd } from '../lib/format'
 import { getNextQueuedTask, getProjectedReward } from '../lib/task-queue'
 
 type TaskFilter = 'All' | TaskType | 'Completed'
+type TaskPack = {
+  id: string
+  label: string
+  tasks: number
+  priceUsd: number
+}
+
+type PackCryptoNetwork = 'USDT-TRC20' | 'USDT-ERC20' | 'USDT-BEP20' | 'BTC' | 'ETH' | 'SOL'
+type PackHistoryEntry = {
+  id: string
+  packLabel: string
+  tasks: number
+  priceUsd: number
+  status: string
+  requestedAt: string | null
+  processedAt: string | null
+}
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL?.toString() || 'http://localhost:4000'
+).replace(/\/$/, '')
+const TASK_PACK_ENDPOINT = `${API_BASE_URL}/api/tasks/purchase-pack`
+const TASK_PACKS_ENDPOINT = `${API_BASE_URL}/api/tasks/packs`
+const TASK_PACK_HISTORY_ENDPOINT = `${API_BASE_URL}/api/tasks/packs/history`
+const WALLET_UPDATED_EVENT = 'rising-star:wallet-updated'
+const DEFAULT_TASK_PACKS: TaskPack[] = [
+  { id: 'pack-5', label: '5 tasks', tasks: 5, priceUsd: 2 },
+  { id: 'pack-10', label: '10 tasks', tasks: 10, priceUsd: 4 },
+  { id: 'pack-25', label: '25 tasks', tasks: 25, priceUsd: 10 },
+  { id: 'pack-50', label: '50 tasks', tasks: 50, priceUsd: 20 },
+  { id: 'pack-75', label: '75 tasks', tasks: 75, priceUsd: 30 },
+  { id: 'pack-100', label: '100 tasks', tasks: 100, priceUsd: 40 },
+  { id: 'pack-125', label: '125 tasks', tasks: 125, priceUsd: 50 },
+]
+const SUPPORTED_PROOF_MIME_TYPES = new Map<string, string>([
+  ['image/jpeg', 'jpg'],
+  ['image/jpg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+  ['application/pdf', 'pdf'],
+])
 
 export function TasksPage() {
   const PAGE_SIZE = 8
@@ -31,7 +79,54 @@ export function TasksPage() {
   const [aiPulseNowMs, setAiPulseNowMs] = useState(() => Date.now())
   const { tasks: rewardTasks, isLoading } = useRewardTasks()
   const currentUser = getAuthenticatedUser()
+  const [taskCredits, setTaskCredits] = useState(
+    Number(currentUser?.taskCredits || 0),
+  )
+  const [isPackModalOpen, setIsPackModalOpen] = useState(false)
+  const [taskPacks, setTaskPacks] = useState<TaskPack[]>(DEFAULT_TASK_PACKS)
+  const [selectedPackId, setSelectedPackId] = useState<string>(DEFAULT_TASK_PACKS[0]?.id || '')
+  const [packTxHash, setPackTxHash] = useState('')
+  const [packProofFile, setPackProofFile] = useState<File | null>(null)
+  const [packCryptoNetwork, setPackCryptoNetwork] = useState<PackCryptoNetwork>('USDT-TRC20')
+  const [copiedWallet, setCopiedWallet] = useState(false)
+  const [qrLoadError, setQrLoadError] = useState(false)
+  const [packHistory, setPackHistory] = useState<PackHistoryEntry[]>([])
+  const [packHistoryLoading, setPackHistoryLoading] = useState(true)
+  const [cryptoInstructions, setCryptoInstructions] = useState(() => ({
+    btcAddress: '',
+    ethAddress: '',
+    usdtTrc20Address: '',
+    usdtErc20Address: '',
+    usdtBep20Address: '',
+    solAddress: '',
+  }))
+  const [purchaseBusy, setPurchaseBusy] = useState(false)
+  const [purchaseError, setPurchaseError] = useState('')
+  const [purchaseMessage, setPurchaseMessage] = useState('')
   const adsUnlocked = canAccessAdTasks(currentUser)
+  const selectedPack = taskPacks.find((item) => item.id === selectedPackId) ?? taskPacks[0]
+  const packAmountUsd = selectedPack ? selectedPack.priceUsd : 0
+  const selectedWalletAddress =
+    (packCryptoNetwork === 'USDT-TRC20'
+      ? cryptoInstructions.usdtTrc20Address
+      : packCryptoNetwork === 'USDT-ERC20'
+        ? cryptoInstructions.usdtErc20Address
+        : packCryptoNetwork === 'USDT-BEP20'
+          ? cryptoInstructions.usdtBep20Address
+          : packCryptoNetwork === 'BTC'
+            ? cryptoInstructions.btcAddress
+            : packCryptoNetwork === 'ETH'
+              ? cryptoInstructions.ethAddress
+              : cryptoInstructions.solAddress) || ''
+  const walletQrUrl = useMemo(() => {
+    if (!selectedWalletAddress) {
+      return ''
+    }
+
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+      selectedWalletAddress,
+    )}`
+  }, [selectedWalletAddress])
   const aiBotLocalState = useMemo(
     () => getAIBotLocalState(new Date(aiPulseNowMs)),
     [aiPulseNowMs, currentUser?.email, currentUser?.id],
@@ -94,6 +189,285 @@ export function TasksPage() {
     }
   }, [])
 
+  const loadPackHistory = useCallback(async () => {
+    try {
+      setPackHistoryLoading(true)
+      const response = await fetch(
+        `${TASK_PACK_HISTORY_ENDPOINT}?status=Completed&limit=12`,
+        {
+          headers: {
+            ...getAuthorizedHeaders(),
+          },
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error('Unable to load pack history')
+      }
+
+      const data = (await response.json()) as { history?: PackHistoryEntry[] }
+      if (!Array.isArray(data.history)) {
+        return
+      }
+
+      const normalized = data.history.filter(
+        (entry) =>
+          entry &&
+          typeof entry.id === 'string' &&
+          typeof entry.packLabel === 'string' &&
+          typeof entry.tasks === 'number' &&
+          typeof entry.priceUsd === 'number',
+      )
+
+      setPackHistory(normalized)
+    } catch {
+      setPackHistory([])
+    } finally {
+      setPackHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    void loadPackHistory()
+
+    return () => {
+      isMounted = false
+    }
+  }, [loadPackHistory])
+
+  function resolveProofMime(file: File) {
+    const rawType = file.type?.toLowerCase() || ''
+    if (SUPPORTED_PROOF_MIME_TYPES.has(rawType)) {
+      return rawType
+    }
+
+    const name = file.name?.toLowerCase() || ''
+    if (name.endsWith('.pdf')) return 'application/pdf'
+    if (name.endsWith('.png')) return 'image/png'
+    if (name.endsWith('.webp')) return 'image/webp'
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg'
+
+    return ''
+  }
+
+  function formatHistoryDate(value: string | null) {
+    if (!value) {
+      return '—'
+    }
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+      return '—'
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date)
+  }
+
+  async function readFileAsDataUrl(file: File, mimeType: string) {
+    if (!mimeType) {
+      throw new Error('Proof of payment must be a valid image or PDF')
+    }
+
+    if (file.type && file.type.toLowerCase() === mimeType) {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          resolve(typeof reader.result === 'string' ? reader.result : '')
+        }
+        reader.onerror = () => reject(new Error('Unable to read the uploaded proof file.'))
+        reader.readAsDataURL(file)
+      })
+    }
+
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index])
+    }
+    const base64 = btoa(binary)
+    return `data:${mimeType};base64,${base64}`
+  }
+
+  useEffect(() => {
+    const onStorage = () => {
+      const nextCredits = Number(getAuthenticatedUser()?.taskCredits || 0)
+      setTaskCredits(nextCredits)
+    }
+
+    window.addEventListener('storage', onStorage)
+    window.addEventListener(WALLET_UPDATED_EVENT, onStorage)
+
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener(WALLET_UPDATED_EVENT, onStorage)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadWalletInstructions() {
+      const config = await fetchSignupConfig()
+      const crypto = config.paymentInstructions?.crypto
+
+      if (!crypto || !isMounted) {
+        return
+      }
+
+      setCryptoInstructions({
+        btcAddress: crypto.btcAddress,
+        ethAddress: crypto.ethAddress,
+        usdtTrc20Address: crypto.usdtTrc20Address,
+        usdtErc20Address: crypto.usdtErc20Address,
+        usdtBep20Address: crypto.usdtBep20Address,
+        solAddress: crypto.solAddress,
+      })
+    }
+
+    void loadWalletInstructions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadTaskPacks() {
+      try {
+        const response = await fetch(TASK_PACKS_ENDPOINT, {
+          headers: {
+            ...getAuthorizedHeaders(),
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Unable to load task packs')
+        }
+
+        const data = (await response.json()) as { packs?: TaskPack[] }
+        if (!Array.isArray(data.packs) || data.packs.length === 0) {
+          return
+        }
+
+        const normalized = data.packs.filter(
+          (pack) =>
+            pack &&
+            typeof pack.id === 'string' &&
+            typeof pack.label === 'string' &&
+            typeof pack.tasks === 'number' &&
+            typeof pack.priceUsd === 'number',
+        )
+
+        if (!isMounted || normalized.length === 0) {
+          return
+        }
+
+        setTaskPacks(normalized)
+        if (!normalized.some((pack) => pack.id === selectedPackId)) {
+          setSelectedPackId(normalized[0]?.id || '')
+        }
+      } catch {
+        // keep defaults
+      }
+    }
+
+    void loadTaskPacks()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedPackId])
+
+  async function handlePurchasePack() {
+    setPurchaseError('')
+    setPurchaseMessage('')
+    setPurchaseBusy(true)
+
+    try {
+      const pack = taskPacks.find((item) => item.id === selectedPackId)
+      if (!pack) {
+        throw new Error('Select a valid task pack.')
+      }
+
+      if (packTxHash.trim().length < 8) {
+        throw new Error('Enter a valid transaction reference.')
+      }
+
+      let paymentProofDataUrl: string | undefined
+      if (packProofFile) {
+        const mimeType = resolveProofMime(packProofFile)
+        paymentProofDataUrl = await readFileAsDataUrl(packProofFile, mimeType)
+      }
+
+      const response = await fetch(TASK_PACK_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthorizedHeaders(),
+        },
+        body: JSON.stringify({
+          packId: pack.id,
+          paymentMethod: 'crypto',
+          paymentTxHash: packTxHash.trim(),
+          paymentNetwork: packCryptoNetwork,
+          paymentProofDataUrl,
+        }),
+      })
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string
+        taskCredits?: number
+      }
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to purchase task pack')
+      }
+
+      if (typeof payload.taskCredits === 'number') {
+        setTaskCredits(payload.taskCredits)
+      } else {
+        const refreshed = await refreshAuthenticatedUser()
+        setTaskCredits(Number(refreshed?.taskCredits || 0))
+      }
+
+      window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT))
+      setPurchaseMessage(payload?.message || 'Task pack purchased')
+      setIsPackModalOpen(false)
+      setPackTxHash('')
+      setPackProofFile(null)
+      await loadPackHistory()
+    } catch (error) {
+      setPurchaseError(
+        error instanceof Error ? error.message : 'Unable to purchase task pack',
+      )
+    } finally {
+      setPurchaseBusy(false)
+    }
+  }
+
+  async function handleCopyWalletAddress(address: string) {
+    if (!address) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopiedWallet(true)
+      window.setTimeout(() => setCopiedWallet(false), 1500)
+    } catch {
+      setCopiedWallet(false)
+    }
+  }
+
   const paginatedTasks = useMemo(() => {
     const startIndex = (taskPage - 1) * PAGE_SIZE
     return filteredTasks.slice(startIndex, startIndex + PAGE_SIZE)
@@ -149,30 +523,30 @@ export function TasksPage() {
               )}
             </div>
 
-            <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-overlay)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-                Bot assist
-              </p>
-              <p className="mt-2 font-medium text-[var(--text-primary)]">
-                {aiBotSummary}
-              </p>
-              <Link
-                to="/ai-bot"
-                className="mt-3 inline-flex text-xs font-semibold uppercase tracking-[0.14em] text-[var(--glow)] transition hover:text-[var(--text-primary)]"
-              >
-                {aiBotActionLabel}
-              </Link>
-            </div>
+          <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-overlay)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
+              Bot assist
+            </p>
+            <p className="mt-2 font-medium text-[var(--text-primary)]">
+              {aiBotSummary}
+            </p>
+            <Link
+              to="/ai-bot"
+              className="mt-3 inline-flex text-xs font-semibold uppercase tracking-[0.14em] text-[var(--glow)] transition hover:text-[var(--text-primary)]"
+            >
+              {aiBotActionLabel}
+            </Link>
           </div>
         </div>
+      </div>
 
-        <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-            Projected reward
-          </p>
-          <p className="mt-3 font-display text-4xl font-semibold text-[var(--text-primary)]">
-            {formatUsd(projectedReward)}
-          </p>
+      <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+        <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+          Projected reward
+        </p>
+        <p className="mt-3 font-display text-4xl font-semibold text-[var(--text-primary)]">
+          {formatUsd(projectedReward)}
+        </p>
           {isLoading && (
             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
               Syncing task data
@@ -184,6 +558,135 @@ export function TasksPage() {
           <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
             {projectedRewardDetail}
           </p>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+            Task credits
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-display text-4xl font-semibold text-[var(--text-primary)]">
+                {taskCredits}
+              </p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Each completed task consumes 1 credit. Credits also raise your daily cap.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPackTxHash('')
+                setPackProofFile(null)
+                setPackCryptoNetwork('USDT-TRC20')
+                setIsPackModalOpen(true)
+              }}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110"
+            >
+              Buy task pack
+            </button>
+          </div>
+          {purchaseMessage && (
+            <p className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              {purchaseMessage}
+            </p>
+          )}
+          {purchaseError && (
+            <p className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+              {purchaseError}
+            </p>
+          )}
+        </div>
+        <div className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+            Packs
+          </p>
+          <div className="mt-4 space-y-3">
+            {taskPacks.map((pack) => (
+              <div
+                key={pack.id}
+                className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">
+                    {pack.label}
+                  </p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">
+                    {formatUsd(pack.priceUsd)}
+                  </p>
+                </div>
+                <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                  {pack.tasks} credits added instantly.
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+              Unlocked packs
+            </p>
+            <h3 className="mt-2 font-display text-2xl font-semibold text-[var(--text-primary)]">
+              Pack history
+            </h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-[var(--text-secondary)]">
+              {packHistory.length} unlocked
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadPackHistory()}
+              className="inline-flex h-9 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {packHistoryLoading && (
+            <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-center text-sm text-[var(--text-secondary)]">
+              Loading pack history...
+            </div>
+          )}
+          {!packHistoryLoading && packHistory.length === 0 && (
+            <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-center text-sm text-[var(--text-secondary)]">
+              No unlocked packs yet.
+            </div>
+          )}
+          {!packHistoryLoading &&
+            packHistory.map((entry) => (
+              <div
+                key={entry.id}
+                className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      {entry.packLabel}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                      {entry.tasks} credits • {formatUsd(entry.priceUsd)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-200">
+                      Unlocked
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                      {formatHistoryDate(entry.processedAt || entry.requestedAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
         </div>
       </section>
 
@@ -393,6 +896,183 @@ export function TasksPage() {
           totalItems={filteredTasks.length}
         />
       </section>
+
+      {isPackModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 py-8 sm:items-center">
+          <div className="w-full max-w-lg max-h-[calc(100vh-4rem)] overflow-y-auto rounded-[30px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+                  Task pack
+                </p>
+                <h3 className="mt-2 font-display text-2xl font-semibold text-[var(--text-primary)]">
+                  Purchase task credits
+                </h3>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  Select a pack, confirm the amount, and complete payment.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPackModalOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] transition hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                aria-label="Close"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <label className="block text-sm text-[var(--text-secondary)]">
+                Task pack
+                <select
+                  value={selectedPackId}
+                  onChange={(event) => setSelectedPackId(event.target.value)}
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--border-strong)]"
+                >
+                  {taskPacks.map((pack) => (
+                    <option key={pack.id} value={pack.id}>
+                      {pack.label} • {formatUsd(pack.priceUsd)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm text-[var(--text-secondary)]">
+                Amount (USD)
+                <input
+                  type="text"
+                  readOnly
+                  value={formatUsd(packAmountUsd)}
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition"
+                />
+              </label>
+            </div>
+
+            {purchaseError && (
+              <p className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {purchaseError}
+              </p>
+            )}
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                Crypto payment only
+              </p>
+
+              <label className="block text-sm text-[var(--text-secondary)]">
+                Funding network
+                <select
+                  value={packCryptoNetwork}
+                  onChange={(event) => {
+                    setPackCryptoNetwork(event.target.value as PackCryptoNetwork)
+                    setQrLoadError(false)
+                  }}
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--border-strong)]"
+                >
+                  <option value="USDT-TRC20">USDT (TRC20)</option>
+                  <option value="USDT-ERC20">USDT (ERC20)</option>
+                  <option value="USDT-BEP20">USDT (BEP20)</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
+                  <option value="SOL">SOL</option>
+                </select>
+              </label>
+
+              <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3 text-xs text-[var(--text-tertiary)]">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                  Wallet address
+                </p>
+                <div className="mt-2 grid gap-4 md:grid-cols-[1fr_auto]">
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="break-all text-[11px]">
+                        {selectedWalletAddress || 'Not set'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyWalletAddress(selectedWalletAddress)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-panel)] text-[var(--text-secondary)] transition hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                        aria-label="Copy wallet address"
+                        title={copiedWallet ? 'Copied' : 'Copy'}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {copiedWallet && (
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-emerald-200">
+                        Copied
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] p-2">
+                    {!qrLoadError && walletQrUrl ? (
+                      <img
+                        src={walletQrUrl}
+                        alt="Scan QR code for payment address"
+                        className="h-28 w-28 rounded-xl object-cover"
+                        onError={() => setQrLoadError(true)}
+                      />
+                    ) : (
+                      <div className="flex h-28 w-28 items-center justify-center rounded-xl border border-dashed border-[var(--border-soft)] text-center text-[11px] text-[var(--text-tertiary)]">
+                        QR unavailable
+                      </div>
+                    )}
+                    <p className="mt-2 text-center text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                      Scan To Pay
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <label className="block text-sm text-[var(--text-secondary)]">
+                Transaction reference
+                <input
+                  type="text"
+                  value={packTxHash}
+                  onChange={(event) => setPackTxHash(event.target.value)}
+                  placeholder="Paste the transaction reference"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--border-strong)] focus:bg-[var(--surface-hover)]"
+                />
+              </label>
+
+              <label className="block text-sm text-[var(--text-secondary)]">
+                Upload proof of payment (optional)
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    setPackProofFile(file)
+                  }}
+                  className="mt-2 w-full rounded-2xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-sm text-[var(--text-secondary)] file:mr-4 file:rounded-full file:border-0 file:bg-[rgba(124,58,237,0.18)] file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.18em] file:text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsPackModalOpen(false)}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePurchasePack()}
+                disabled={purchaseBusy}
+                className={clsx(
+                  'inline-flex h-11 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition',
+                  purchaseBusy ? 'cursor-wait opacity-80' : 'hover:brightness-110',
+                )}
+              >
+                {purchaseBusy ? 'Processing...' : 'Confirm purchase'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

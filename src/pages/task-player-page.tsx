@@ -18,6 +18,7 @@ import { AD_VIDEO_ASSETS } from '../data/ad-video-catalog'
 import { MUSIC_AUDIO_ASSETS } from '../data/music-audio-catalog'
 import { type TaskType } from '../data/platform-data'
 import { useRewardTasks } from '../hooks/use-reward-tasks'
+import { getAuthenticatedUser } from '../lib/auth'
 import { formatUsd } from '../lib/format'
 import { showToast } from '../lib/toast'
 
@@ -86,6 +87,7 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
 const MEDIA_END_COMPLETION_THRESHOLD_SECONDS = 2
 const SEEK_TOLERANCE_SECONDS = 0.2
 const SEEK_WARNING_COOLDOWN_MS = 4000
+const WALLET_UPDATED_EVENT = 'rising-star:wallet-updated'
 
 function parseDurationToSeconds(duration: string) {
   const [minutesRaw, secondsRaw] = duration.split(':')
@@ -154,6 +156,7 @@ export function TaskPlayerPage() {
   const musicRef = useRef<HTMLAudioElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const completionNotifiedRef = useRef(false)
+  const noCreditNotifiedRef = useRef(false)
   const shouldAutoReturnRef = useRef(false)
   const resumeAfterUnmuteRef = useRef(false)
   const openedSessionRef = useRef<string | null>(null)
@@ -179,6 +182,9 @@ export function TaskPlayerPage() {
   const isTimeLocked = Boolean(task?.isTimeLocked)
   const isCompleted = task?.status === 'completed'
   const elapsedSeconds = Math.max(totalSeconds - remainingSeconds, 0)
+  const [taskCredits, setTaskCredits] = useState(
+    Number(getAuthenticatedUser()?.taskCredits || 0),
+  )
   const completionPercent = isCompleted
     ? 100
     : totalSeconds > 0
@@ -424,6 +430,15 @@ export function TaskPlayerPage() {
       return
     }
 
+    if (taskCredits <= 0) {
+      showToast({
+        variant: 'warning',
+        title: 'No task credits',
+        description: 'Purchase a task pack to start this session.',
+      })
+      return
+    }
+
     setHasStarted(true)
 
     if (isLikeSession) {
@@ -537,6 +552,28 @@ export function TaskPlayerPage() {
   }, [taskSessionId, hasStarted, isRunning, isCompleted, isTimeLocked])
 
   useEffect(() => {
+    function syncCredits() {
+      const nextCredits = Number(getAuthenticatedUser()?.taskCredits || 0)
+      setTaskCredits(nextCredits)
+    }
+
+    syncCredits()
+    window.addEventListener('storage', syncCredits)
+    window.addEventListener(WALLET_UPDATED_EVENT, syncCredits)
+
+    return () => {
+      window.removeEventListener('storage', syncCredits)
+      window.removeEventListener(WALLET_UPDATED_EVENT, syncCredits)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (remainingSeconds > 0 || taskCredits > 0) {
+      noCreditNotifiedRef.current = false
+    }
+  }, [remainingSeconds, taskCredits])
+
+  useEffect(() => {
     if (
       !taskSessionId ||
       !hasStarted ||
@@ -549,6 +586,18 @@ export function TaskPlayerPage() {
     }
 
     if (isLikeSession && !likedArtwork) {
+      return
+    }
+
+    if (taskCredits <= 0) {
+      if (!noCreditNotifiedRef.current) {
+        noCreditNotifiedRef.current = true
+        showToast({
+          variant: 'warning',
+          title: 'No task credits',
+          description: 'Purchase a task pack to complete this session.',
+        })
+      }
       return
     }
 

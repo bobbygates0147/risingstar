@@ -12,6 +12,7 @@ import {
   canAccessAdTasks,
   getAuthenticatedUser,
   getAuthorizedHeaders,
+  refreshAuthenticatedUser,
   resolveUserTierId,
   signOut,
   type SignupTierId,
@@ -570,15 +571,14 @@ function getDailyLimitForTier(tierId: SignupTierId) {
   return DAILY_LIMIT_BY_TIER[tierId]
 }
 
-function getExtraTaskSlotsFromDeposit(
+function getExtraTaskSlotsFromCredits(
   user: ReturnType<typeof getAuthenticatedUser>,
 ) {
-  const parsed = Number.parseInt(String(user?.extraTaskSlots ?? 0), 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 0
-  }
+  const creditSlots = Number.parseInt(String(user?.taskCredits ?? 0), 10)
+  const safeCredits =
+    Number.isFinite(creditSlots) && creditSlots > 0 ? creditSlots : 0
 
-  return parsed
+  return safeCredits
 }
 
 function getOpenSlotLimitForTier(tierId: SignupTierId) {
@@ -605,7 +605,7 @@ function buildPersonalizedQueue(
 ) {
   const scope = getQueueScope(now)
   const baseDailyLimit = getDailyLimitForTier(scope.tierId)
-  const bonusDailyLimit = getExtraTaskSlotsFromDeposit(scope.user)
+  const bonusDailyLimit = getExtraTaskSlotsFromCredits(scope.user)
   const adsEnabled = canAccessAdTasks(scope.user)
   const aiBotAutoModeActive = isAIBotAutomationActiveForUser(scope.user, now)
 
@@ -811,7 +811,7 @@ function buildPersonalizedQueue(
 
     if (index >= releaseCount) {
       task.isTimeLocked = true
-      task.unlockLabel = 'Opens after current queue'
+      task.unlockLabel = 'after current queue'
     }
   })
 
@@ -961,6 +961,10 @@ async function syncTaskCompletion(task: RewardTask, completedAt: Date) {
     }
     throw new Error(`Task completion sync failed: ${response.status}`)
   }
+
+  await response.json().catch(() => ({}))
+  await refreshAuthenticatedUser()
+  window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT))
 }
 
 export function useRewardTasks() {

@@ -62,17 +62,17 @@ export function AdminPanelPage() {
     message,
     approveWithdrawal,
     rejectWithdrawal,
-    approveDeposit,
-    rejectDeposit,
+    approveTaskPack,
+    rejectTaskPack,
     verifyAIBot,
     rejectAIBot,
   } = useAdminOverview()
 
-  const { users, transactions, withdrawals, deposits, stats } = overview
+  const { users, transactions, withdrawals, taskPacks, stats } = overview
   const [usersPage, setUsersPage] = useState(1)
   const [transactionsPage, setTransactionsPage] = useState(1)
   const [withdrawalsPage, setWithdrawalsPage] = useState(1)
-  const [depositsPage, setDepositsPage] = useState(1)
+  const [taskPacksPage, setTaskPacksPage] = useState(1)
 
   const usersPageCount = Math.max(1, Math.ceil(users.length / PAGE_SIZE))
   const transactionsPageCount = Math.max(
@@ -83,7 +83,7 @@ export function AdminPanelPage() {
     1,
     Math.ceil(withdrawals.length / PAGE_SIZE),
   )
-  const depositsPageCount = Math.max(1, Math.ceil(deposits.length / PAGE_SIZE))
+  const taskPacksPageCount = Math.max(1, Math.ceil(taskPacks.length / PAGE_SIZE))
 
   useEffect(() => {
     setUsersPage((current) => Math.min(current, usersPageCount))
@@ -98,8 +98,8 @@ export function AdminPanelPage() {
   }, [withdrawalsPageCount])
 
   useEffect(() => {
-    setDepositsPage((current) => Math.min(current, depositsPageCount))
-  }, [depositsPageCount])
+    setTaskPacksPage((current) => Math.min(current, taskPacksPageCount))
+  }, [taskPacksPageCount])
 
   const paginatedUsers = useMemo(() => {
     const startIndex = (usersPage - 1) * PAGE_SIZE
@@ -116,10 +116,10 @@ export function AdminPanelPage() {
     return withdrawals.slice(startIndex, startIndex + PAGE_SIZE)
   }, [withdrawals, withdrawalsPage])
 
-  const paginatedDeposits = useMemo(() => {
-    const startIndex = (depositsPage - 1) * PAGE_SIZE
-    return deposits.slice(startIndex, startIndex + PAGE_SIZE)
-  }, [deposits, depositsPage])
+  const paginatedTaskPacks = useMemo(() => {
+    const startIndex = (taskPacksPage - 1) * PAGE_SIZE
+    return taskPacks.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [taskPacks, taskPacksPage])
 
   return (
     <div className="space-y-6">
@@ -215,12 +215,12 @@ export function AdminPanelPage() {
         <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-              Pending Deposits
+              Pending Task Packs
             </p>
             <ShieldAlert className="h-4 w-4 text-amber-200" />
           </div>
           <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
-            {stats.pendingDeposits ?? 0}
+            {stats.pendingTaskPacks ?? 0}
           </p>
         </article>
       </section>
@@ -456,17 +456,17 @@ export function AdminPanelPage() {
       <section className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
         <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
           <ShieldAlert className="h-4 w-4 text-amber-200" />
-          Deposit Requests
+          Task Pack Purchases
         </p>
 
         <div className="mt-4 space-y-3">
-          {deposits.length === 0 && (
+          {taskPacks.length === 0 && (
             <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-5 text-sm text-[var(--text-secondary)]">
-              No deposit requests available.
+              No task pack purchases available.
             </div>
           )}
 
-          {paginatedDeposits.map((request) => (
+          {paginatedTaskPacks.map((request) => (
             <article
               key={request.id}
               className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4"
@@ -476,14 +476,13 @@ export function AdminPanelPage() {
                   <p className="font-medium text-[var(--text-primary)]">{request.userName}</p>
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">{request.userEmail}</p>
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                    {request.network}
-                    {request.reference ? ` | ${request.reference}` : ''}
+                    {request.packLabel} • {request.tasks} credits
                   </p>
-                  {request.note && (
-                    <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                      Note: {request.note}
-                    </p>
-                  )}
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    {request.paymentMethod.toUpperCase()}
+                    {request.paymentNetwork ? ` | ${request.paymentNetwork}` : ''}
+                    {request.paymentTxHash ? ` | ${request.paymentTxHash}` : ''}
+                  </p>
                   {request.proofUrl && (
                     <a
                       href={request.proofUrl}
@@ -497,7 +496,7 @@ export function AdminPanelPage() {
                 </div>
                 <div className="text-right">
                   <p className="font-display text-xl font-semibold text-[var(--text-primary)]">
-                    {formatUsd(request.amount)}
+                    {formatUsd(request.priceUsd)}
                   </p>
                   <p className={`mt-1 text-xs font-semibold uppercase ${statusTone(request.status)}`}>
                     {request.status}
@@ -516,7 +515,7 @@ export function AdminPanelPage() {
                     <button
                       type="button"
                       disabled={isBusy}
-                      onClick={() => approveDeposit(request.id)}
+                      onClick={() => approveTaskPack(request.id)}
                       className="inline-flex h-9 items-center gap-1 rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
@@ -525,7 +524,7 @@ export function AdminPanelPage() {
                     <button
                       type="button"
                       disabled={isBusy}
-                      onClick={() => rejectDeposit(request.id)}
+                      onClick={() => rejectTaskPack(request.id)}
                       className="inline-flex h-9 items-center gap-1 rounded-xl border border-rose-400/35 bg-rose-500/10 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <XCircle className="h-3.5 w-3.5" />
@@ -537,10 +536,10 @@ export function AdminPanelPage() {
             </article>
           ))}
           <PaginationControls
-            itemLabel="deposits"
-            onPageChange={setDepositsPage}
-            page={depositsPage}
-            totalItems={deposits.length}
+            itemLabel="task packs"
+            onPageChange={setTaskPacksPage}
+            page={taskPacksPage}
+            totalItems={taskPacks.length}
           />
         </div>
       </section>

@@ -16,7 +16,6 @@ export type ActivityLogKind =
   | 'milestone'
   | 'bonus'
   | 'withdrawal'
-  | 'deposit'
 
 export type ActivityLogEntry = {
   id: string
@@ -50,8 +49,7 @@ function isActivityLogKind(value: unknown): value is ActivityLogKind {
     value === 'art' ||
     value === 'milestone' ||
     value === 'bonus' ||
-    value === 'withdrawal' ||
-    value === 'deposit'
+    value === 'withdrawal'
   )
 }
 

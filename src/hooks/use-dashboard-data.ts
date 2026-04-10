@@ -44,8 +44,7 @@ function isActivityEntry(value: unknown): value is ActivityEntry {
     typeof item.label === 'string' &&
     (item.category === 'Music' ||
       item.category === 'Ads' ||
-      item.category === 'Art' ||
-      item.category === 'Deposit') &&
+      item.category === 'Art') &&
     typeof item.amount === 'number' &&
     typeof item.time === 'string' &&
     typeof item.detail === 'string'

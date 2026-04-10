@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  activateAIBotLocalState,
   AI_BOT_DEFAULT_CHECKPOINT_INTERVAL_MINUTES,
   AI_BOT_DEFAULT_FEE_USD,
-  completeAIBotLocalCheckpoint,
   getAIBotLocalState,
-  setAIBotLocalEnabled,
 } from '../lib/ai-bot-state'
 import { getAuthorizedHeaders, refreshAuthenticatedUser, signOut } from '../lib/auth'
 import { getDefaultCryptoWalletInstructions } from '../lib/crypto-wallets'
@@ -44,6 +41,7 @@ export type AIBotStatus = {
     months: number
     active: boolean
     expired: boolean
+    verified?: boolean
     expiresAt: string | null
     remainingDays: number
   }
@@ -65,6 +63,8 @@ type ActivatePayload = {
   paymentMethod: PaymentMethod
   paymentReference: string
   paymentAmountUsd: number
+  paymentTxHash?: string
+  paymentProofDataUrl?: string
 }
 
 const fallbackConfig: AIBotConfig = {
@@ -391,6 +391,9 @@ export function useAIBot() {
       setIsBusy(true)
 
       try {
+        if (isLocalMode) {
+          throw new Error('Offline mode: connect to the server to activate AI Bot')
+        }
         const response = await fetch(`${API_BASE_URL}/api/ai-bot/activate`, {
           method: 'POST',
           headers: {
@@ -421,26 +424,15 @@ export function useAIBot() {
         await refreshAuthenticatedUser()
         setMessage(data.message || 'AI Bot activated')
         setIsLocalMode(false)
-      } catch {
-        const local = activateAIBotLocalState({
-          paymentMethod: payload.paymentMethod,
-          feeUsd: payload.paymentAmountUsd,
-        })
-
-        setStatus(localStateToStatus())
-        setConfig((previous) => ({
-          ...previous,
-          aiBotFeeUsd: local.feeUsd,
-          subscriptionMonths: previous.subscriptionMonths || fallbackConfig.subscriptionMonths,
-          checkpointIntervalMinutes: local.checkpointIntervalMinutes,
-        }))
-        setMessage('AI Bot activated in auto mode')
-        setIsLocalMode(true)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to activate AI Bot'
+        setError(msg)
+        setIsLocalMode(false)
       } finally {
         setIsBusy(false)
       }
     },
-    [reload],
+    [isLocalMode, reload],
   )
 
   const completeCheckpoint = useCallback(async () => {
@@ -449,6 +441,9 @@ export function useAIBot() {
     setIsBusy(true)
 
     try {
+      if (isLocalMode) {
+        throw new Error('Offline mode: connect to the server to complete a checkpoint')
+      }
       const response = await fetch(`${API_BASE_URL}/api/ai-bot/checkpoint`, {
         method: 'POST',
         headers: {
@@ -475,15 +470,14 @@ export function useAIBot() {
       await refreshAuthenticatedUser()
       setMessage(data.message || 'Checkpoint completed')
       setIsLocalMode(false)
-    } catch {
-      completeAIBotLocalCheckpoint()
-      setStatus(localStateToStatus())
-      setMessage('Checkpoint completed')
-      setIsLocalMode(true)
-    } finally {
-      setIsBusy(false)
-    }
-  }, [reload])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to complete checkpoint'
+      setError(msg)
+      setIsLocalMode(false)
+      } finally {
+        setIsBusy(false)
+      }
+  }, [isLocalMode, reload])
 
   const toggleAutomation = useCallback(
     async (enabled: boolean) => {
@@ -492,6 +486,9 @@ export function useAIBot() {
       setIsBusy(true)
 
       try {
+        if (isLocalMode) {
+          throw new Error('Offline mode: connect to the server to toggle auto mode')
+        }
         const response = await fetch(`${API_BASE_URL}/api/ai-bot/toggle`, {
           method: 'POST',
           headers: {
@@ -519,16 +516,15 @@ export function useAIBot() {
         await refreshAuthenticatedUser()
         setMessage(data.message || (enabled ? 'Auto mode enabled' : 'Auto mode paused'))
         setIsLocalMode(false)
-      } catch {
-        setAIBotLocalEnabled(enabled)
-        setStatus(localStateToStatus())
-        setMessage(enabled ? 'Auto mode enabled' : 'Auto mode paused')
-        setIsLocalMode(true)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to toggle AI Bot'
+        setError(msg)
+        setIsLocalMode(false)
       } finally {
         setIsBusy(false)
       }
     },
-    [reload],
+    [isLocalMode, reload],
   )
 
   const runDailyAutomation = useCallback(async () => {

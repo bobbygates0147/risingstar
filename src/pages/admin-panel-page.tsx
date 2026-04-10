@@ -12,11 +12,16 @@ import { useAdminOverview } from '../hooks/use-admin-overview'
 import { formatUsd } from '../lib/format'
 
 function statusTone(status: string) {
-  if (status === 'Active' || status === 'Completed' || status === 'approved') {
+  if (
+    status === 'Active' ||
+    status === 'Completed' ||
+    status === 'approved' ||
+    status === 'verified'
+  ) {
     return 'text-emerald-300'
   }
 
-  if (status === 'pending' || status === 'Pending') {
+  if (status === 'pending' || status === 'Pending' || status === 'unverified') {
     return 'text-amber-200'
   }
 
@@ -59,6 +64,8 @@ export function AdminPanelPage() {
     rejectWithdrawal,
     approveDeposit,
     rejectDeposit,
+    verifyAIBot,
+    rejectAIBot,
   } = useAdminOverview()
 
   const { users, transactions, withdrawals, deposits, stats } = overview
@@ -239,6 +246,8 @@ export function AdminPanelPage() {
                       <th className="px-3 py-2 font-medium">Email</th>
                       <th className="px-3 py-2 font-medium">Tier</th>
                       <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium">AI Bot</th>
+                      <th className="px-3 py-2 font-medium">AI Verification</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -256,6 +265,63 @@ export function AdminPanelPage() {
                           className={`px-3 py-3 text-xs font-semibold uppercase ${statusTone(user.status)}`}
                         >
                           {user.status}
+                        </td>
+                        <td
+                          className={`px-3 py-3 text-xs font-semibold uppercase ${statusTone(user.aiBotStatus)}`}
+                        >
+                          {user.aiBotStatus}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`text-xs font-semibold uppercase ${statusTone(user.aiBotVerificationStatus)}`}
+                            >
+                              {user.aiBotVerificationStatus === 'unverified'
+                                ? 'Not Verified'
+                                : user.aiBotVerificationStatus === 'verified'
+                                  ? 'Verified'
+                                  : 'Rejected'}
+                            </span>
+                            {user.aiBotPaymentTxHash && (
+                              <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                                {user.aiBotPaymentTxHash.slice(0, 10)}…
+                                {user.aiBotPaymentTxHash.slice(-6)}
+                              </span>
+                            )}
+                            {user.aiBotProofUrl && (
+                              <a
+                                href={user.aiBotProofUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--blue)]"
+                              >
+                                View proof
+                              </a>
+                            )}
+                            {user.aiBotStatus === 'Active' &&
+                              user.aiBotVerificationStatus === 'unverified' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => verifyAIBot(user.id)}
+                                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Verify
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => rejectAIBot(user.id)}
+                                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-400/35 bg-rose-500/10 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -46,6 +46,10 @@ export type AuthUser = {
   aiBotEnabled?: boolean
   aiBotPaymentMethod?: string
   aiBotPaymentReference?: string
+  aiBotVerificationStatus?: string
+  aiBotVerifiedAt?: string | null
+  aiBotPaymentTxHash?: string
+  aiBotPaymentProofFile?: string
   aiBotActivatedAt?: string | null
   aiBotExpiresAt?: string | null
   aiBotSubscriptionMonths?: number

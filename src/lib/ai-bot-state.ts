@@ -280,6 +280,10 @@ export function isAIBotBackendAutomationActive(
     return false
   }
 
+  if (user.aiBotVerificationStatus && user.aiBotVerificationStatus !== 'verified') {
+    return false
+  }
+
   const expiresAtMs = toTimestamp(user.aiBotExpiresAt)
   if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now.getTime()) {
     return false
@@ -298,6 +302,10 @@ export function isAIBotBackendSubscriptionActive(
   now = new Date(),
 ) {
   if (!user) {
+    return false
+  }
+
+  if (user.aiBotVerificationStatus && user.aiBotVerificationStatus !== 'verified') {
     return false
   }
 

@@ -30,6 +30,14 @@ type CryptoNetworkKey =
   | 'usdt_bep20'
   | 'sol'
 
+const SUPPORTED_PROOF_MIME_TYPES = new Map<string, string>([
+  ['image/jpeg', 'jpg'],
+  ['image/jpg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+  ['application/pdf', 'pdf'],
+])
+
 function formatDateTime(value: string | null) {
   if (!value) {
     return 'Not set'
@@ -76,6 +84,7 @@ export function AIBotPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('crypto')
   const [selectedNetwork, setSelectedNetwork] = useState<CryptoNetworkKey>('usdt_trc20')
   const [paymentReference, setPaymentReference] = useState('')
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
   const [qrLoadError, setQrLoadError] = useState(false)
   const [paymentFlowOpen, setPaymentFlowOpen] = useState(false)
@@ -83,6 +92,10 @@ export function AIBotPage() {
   const paymentSectionRef = useRef<HTMLElement | null>(null)
   const lastMessageRef = useRef('')
   const lastErrorRef = useRef('')
+  const isOffline = isLocalMode
+  const proofFileSizeLabel = paymentProofFile
+    ? `${(paymentProofFile.size / (1024 * 1024)).toFixed(2)} MB`
+    : ''
 
   const availableMethods = useMemo(() => {
     const methods = new Set<PaymentMethod>(['crypto', 'wallet'])
@@ -161,6 +174,7 @@ export function AIBotPage() {
   const isPurchased = Boolean(status.activatedAt)
   const subscriptionExpired = Boolean(status.subscription.expired)
   const needsRenewal = isPurchased && subscriptionExpired
+  const isUnverified = isPurchased && status.subscription.verified === false
 
   useEffect(() => {
     if (!isPurchased || needsRenewal) {
@@ -170,7 +184,49 @@ export function AIBotPage() {
     setPaymentFlowOpen(false)
     setPaymentFlowError('')
     setPaymentReference('')
+    setPaymentProofFile(null)
   }, [isPurchased, needsRenewal])
+
+  function resolveProofMime(file: File) {
+    const rawType = file.type?.toLowerCase() || ''
+    if (SUPPORTED_PROOF_MIME_TYPES.has(rawType)) {
+      return rawType
+    }
+
+    const name = file.name?.toLowerCase() || ''
+    if (name.endsWith('.pdf')) return 'application/pdf'
+    if (name.endsWith('.png')) return 'image/png'
+    if (name.endsWith('.webp')) return 'image/webp'
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg'
+
+    return ''
+  }
+
+  async function readFileAsDataUrl(file: File, mimeType: string) {
+    if (!mimeType) {
+      throw new Error('Proof of payment must be a valid image or PDF')
+    }
+
+    if (file.type && file.type.toLowerCase() === mimeType) {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          resolve(typeof reader.result === 'string' ? reader.result : '')
+        }
+        reader.onerror = () => reject(new Error('Unable to read the uploaded proof file.'))
+        reader.readAsDataURL(file)
+      })
+    }
+
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index])
+    }
+    const base64 = btoa(binary)
+    return `data:${mimeType};base64,${base64}`
+  }
 
   useEffect(() => {
     if (!message || message === lastMessageRef.current) {
@@ -200,6 +256,8 @@ export function AIBotPage() {
 
   const statusLabel = !isPurchased
     ? 'Not Activated'
+    : isUnverified
+      ? 'Payment Unverified'
     : status.enabled
       ? status.checkpoint.required
         ? 'Checkpoint Required'
@@ -223,6 +281,7 @@ export function AIBotPage() {
   function openPaymentFlow() {
     setPaymentFlowOpen(true)
     setPaymentFlowError('')
+    setPaymentProofFile(null)
 
     window.requestAnimationFrame(() => {
       paymentSectionRef.current?.scrollIntoView({
@@ -264,14 +323,23 @@ export function AIBotPage() {
       return
     }
 
-    if (!paymentReference.trim() || paymentReference.trim().length < 3) {
-      setPaymentFlowError('Please enter a valid payment reference.')
+    if (!paymentReference.trim() || paymentReference.trim().length < 8) {
+      setPaymentFlowError('Please enter a valid transaction hash.')
       return
+    }
+
+    let paymentProofDataUrl: string | undefined
+
+    if (paymentProofFile) {
+      const mimeType = resolveProofMime(paymentProofFile)
+      paymentProofDataUrl = await readFileAsDataUrl(paymentProofFile, mimeType)
     }
 
     await activate({
       paymentMethod: 'crypto',
       paymentReference: paymentReference.trim(),
+      paymentTxHash: paymentReference.trim(),
+      paymentProofDataUrl,
       paymentAmountUsd: config.aiBotFeeUsd,
     })
   }
@@ -301,7 +369,7 @@ export function AIBotPage() {
               <button
                 type="button"
                 onClick={openPaymentFlow}
-                disabled={isBusy || isLoading}
+                disabled={isBusy || isLoading || isOffline}
                 className="inline-flex h-11 items-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <Sparkles className="h-4 w-4" />
@@ -313,7 +381,7 @@ export function AIBotPage() {
               <button
                 type="button"
                 onClick={() => toggleAutomation(!status.enabled)}
-                disabled={isBusy || isLoading}
+                disabled={isBusy || isLoading || isOffline || isUnverified}
                 className="inline-flex h-11 items-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <PlayCircle className="h-4 w-4" />
@@ -329,7 +397,7 @@ export function AIBotPage() {
               <button
                 type="button"
                 onClick={completeCheckpoint}
-                disabled={isBusy || isLoading}
+                disabled={isBusy || isLoading || isOffline || isUnverified}
                 className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 Complete checkpoint
@@ -344,10 +412,28 @@ export function AIBotPage() {
             </Link>
           </div>
 
-          {isLocalMode && (
-            <p className="mt-3 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-              Local fallback mode active
-            </p>
+          {isOffline && (
+            <div className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-amber-100/90">
+                <ShieldAlert className="h-4 w-4" />
+                Offline / Not Synced
+              </div>
+              <p className="mt-2 text-sm text-amber-100/90">
+                Showing cached device data only. Activation and bot controls are disabled until the
+                server reconnects.
+              </p>
+            </div>
+          )}
+          {isUnverified && !isOffline && (
+            <div className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-amber-100/90">
+                <ShieldAlert className="h-4 w-4" />
+                Verification Pending
+              </div>
+              <p className="mt-2 text-sm text-amber-100/90">
+                AI Bot controls are locked until an admin verifies your crypto payment.
+              </p>
+            </div>
           )}
 
           {message && (
@@ -461,7 +547,7 @@ export function AIBotPage() {
             <button
               type="button"
               onClick={handleStartPayment}
-              disabled={isBusy || isLoading}
+              disabled={isBusy || isLoading || isOffline}
               className="inline-flex h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-5 text-sm font-semibold text-white shadow-[0_18px_30px_rgba(124,58,237,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70 sm:self-end"
             >
               {`Pay ${formatUsd(config.aiBotFeeUsd)}`}
@@ -542,15 +628,33 @@ export function AIBotPage() {
 
               <label className="mt-4 block">
                 <span className="text-sm font-medium text-[var(--text-secondary)]">
-                  Payment reference
+                  Transaction hash
                 </span>
                 <input
                   type="text"
                   value={paymentReference}
                   onChange={(event) => setPaymentReference(event.target.value)}
-                  placeholder="Transaction ID / transfer reference"
+                  placeholder="Paste the transaction hash"
                   className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--border-strong)] focus:bg-[var(--surface-hover)]"
                 />
+              </label>
+
+              <label className="mt-4 block text-sm text-[var(--text-secondary)]">
+                Upload proof of payment (optional)
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    setPaymentProofFile(file)
+                  }}
+                  className="mt-2 w-full rounded-2xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-4 text-sm text-[var(--text-secondary)] file:mr-4 file:rounded-full file:border-0 file:bg-[rgba(124,58,237,0.18)] file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.18em] file:text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
+                />
+                {paymentProofFile && (
+                  <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+                    Selected: {paymentProofFile.name} • {proofFileSizeLabel}
+                  </p>
+                )}
               </label>
             </div>
           )}
@@ -590,6 +694,7 @@ export function AIBotPage() {
               disabled={
                 isBusy ||
                 isLoading ||
+                isOffline ||
                 (selectedMethodSafe === 'wallet' && !walletHasEnoughBalance)
               }
               className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] text-base font-semibold text-white shadow-[0_18px_30px_rgba(124,58,237,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"

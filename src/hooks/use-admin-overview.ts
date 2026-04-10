@@ -12,6 +12,10 @@ export type AdminUserRow = {
   tier: string
   status: string
   role: 'user' | 'admin'
+  aiBotStatus: 'Active' | 'Inactive'
+  aiBotVerificationStatus: 'verified' | 'unverified' | 'rejected'
+  aiBotPaymentTxHash: string
+  aiBotProofUrl: string
 }
 
 export type AdminTransaction = {
@@ -102,7 +106,13 @@ function isAdminUserRow(value: unknown): value is AdminUserRow {
     typeof value.email === 'string' &&
     typeof value.tier === 'string' &&
     typeof value.status === 'string' &&
-    (value.role === 'user' || value.role === 'admin')
+    (value.role === 'user' || value.role === 'admin') &&
+    (value.aiBotStatus === 'Active' || value.aiBotStatus === 'Inactive') &&
+    (value.aiBotVerificationStatus === 'verified' ||
+      value.aiBotVerificationStatus === 'unverified' ||
+      value.aiBotVerificationStatus === 'rejected') &&
+    typeof value.aiBotPaymentTxHash === 'string' &&
+    typeof value.aiBotProofUrl === 'string'
   )
 }
 
@@ -222,9 +232,19 @@ function toAdminOverview(value: unknown): AdminOverviewPayload {
           return deposit
         })
     : fallbackOverview.deposits
+  const usersWithProofs = users.map((user) => {
+    if (user.aiBotProofUrl && user.aiBotProofUrl.startsWith('/')) {
+      return {
+        ...user,
+        aiBotProofUrl: `${API_BASE_URL}${user.aiBotProofUrl}`,
+      }
+    }
+
+    return user
+  })
 
   return {
-    users,
+    users: usersWithProofs,
     transactions,
     withdrawals,
     deposits,
@@ -397,6 +417,63 @@ export function useAdminOverview() {
     [load],
   )
 
+  const processAIBotVerification = useCallback(
+    async (userId: string, action: 'verify' | 'reject') => {
+      setError('')
+      setMessage('')
+      setIsBusy(true)
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/admin/ai-bot/${encodeURIComponent(userId)}/${action}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthorizedHeaders(),
+            },
+          },
+        )
+
+        const payload = (await response.json().catch(() => ({}))) as unknown
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            handleUnauthorized()
+          }
+
+          throw new Error(
+            extractMessage(
+              payload,
+              action === 'verify'
+                ? 'Unable to verify AI Bot payment'
+                : 'Unable to reject AI Bot payment',
+            ),
+          )
+        }
+
+        setMessage(
+          extractMessage(
+            payload,
+            action === 'verify' ? 'AI Bot payment verified' : 'AI Bot payment rejected',
+          ),
+        )
+        await load(true)
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : action === 'verify'
+              ? 'Unable to verify AI Bot payment'
+              : 'Unable to reject AI Bot payment',
+        )
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [load],
+  )
+
   return {
     overview,
     isLoading,
@@ -408,5 +485,7 @@ export function useAdminOverview() {
     rejectWithdrawal: (requestId: string) => processWithdrawal(requestId, 'reject'),
     approveDeposit: (depositId: string) => processDeposit(depositId, 'approve'),
     rejectDeposit: (depositId: string) => processDeposit(depositId, 'reject'),
+    verifyAIBot: (userId: string) => processAIBotVerification(userId, 'verify'),
+    rejectAIBot: (userId: string) => processAIBotVerification(userId, 'reject'),
   }
 }

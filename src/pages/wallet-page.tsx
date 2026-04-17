@@ -316,7 +316,6 @@ export function WalletPage() {
     return entries.slice(startIndex, startIndex + PAGE_SIZE)
   }, [entries, entriesPage])
   const totalBalanceLocal = currencyConverter.formatDualFromUsd(totalBalance)
-  const withdrawableBalanceLocal = currencyConverter.formatDualFromUsd(withdrawableBalance)
 
   function formatSignedLocalFromUsd(value: number) {
     const sign = value >= 0 ? '+' : '-'
@@ -493,14 +492,6 @@ export function WalletPage() {
                   <p className="text-sm text-[var(--text-secondary)]">
                     Available to withdraw: {usdFormatter.format(withdrawableBalance)}
                   </p>
-                  <span className="mt-2 inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-1 text-xs text-emerald-100">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-lg border border-emerald-200/25 bg-emerald-300/10 font-semibold text-emerald-100">
-                      =
-                    </span>
-                    <span className="font-semibold text-emerald-100">
-                      {withdrawableBalanceLocal.local}
-                    </span>
-                  </span>
                 </div>
               </div>
 

@@ -494,7 +494,7 @@ export function WalletPage() {
                     Available to withdraw: {usdFormatter.format(withdrawableBalance)}
                   </p>
                   <p className="text-xs text-[var(--text-tertiary)]">
-                    Local estimate: {withdrawableBalanceLocal.local}
+                    = {withdrawableBalanceLocal.local}
                   </p>
                 </div>
               </div>
@@ -509,10 +509,7 @@ export function WalletPage() {
                 {usdFormatter.format(totalBalance)}
               </p>
               <p className="mt-2 text-sm text-emerald-200">
-                Approx {totalBalanceLocal.local} local
-              </p>
-              <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                Global balance remains USD / USDT
+                = {totalBalanceLocal.local}
               </p>
               
           </div>

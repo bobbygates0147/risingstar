@@ -228,13 +228,7 @@ export function TasksPage() {
   }, [])
 
   useEffect(() => {
-    let isMounted = true
-
     void loadPackHistory()
-
-    return () => {
-      isMounted = false
-    }
   }, [loadPackHistory])
 
   function resolveProofMime(file: File) {

@@ -600,7 +600,7 @@ export function ProfilePage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[0_10px_24px_rgba(0,0,0,0.28)] ring-2 ring-[var(--surface-panel)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-65"
+                className="absolute bottom-1 right-1 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border-soft)] bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[0_10px_24px_rgba(0,0,0,0.28)] ring-2 ring-[var(--surface-panel)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-65"
                 aria-label="Update profile photo"
                 disabled={avatarBusy || isSaving}
               >

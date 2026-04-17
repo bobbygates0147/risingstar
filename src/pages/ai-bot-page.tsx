@@ -147,11 +147,11 @@ export function AIBotPage() {
     return [
       'Rising Star AI Bot Payment',
       `Amount USD: ${config.aiBotFeeUsd.toFixed(2)}`,
-      `Amount ${currencyConverter.currencyCode}: ${aiBotFeeLocal.local}`,
+      `= ${aiBotFeeLocal.local}`,
       `Network: ${selectedNetworkOption.label}`,
       `Address: ${selectedNetworkOption.address}`,
     ].join('\n')
-  }, [aiBotFeeLocal.local, config.aiBotFeeUsd, currencyConverter.currencyCode, selectedNetworkOption])
+  }, [aiBotFeeLocal.local, config.aiBotFeeUsd, selectedNetworkOption])
 
   const qrImageUrl = useMemo(() => {
     if (!qrPayload) {
@@ -301,7 +301,7 @@ export function AIBotPage() {
     if (selectedMethodSafe === 'wallet' && !walletHasEnoughBalance) {
       setPaymentFlowOpen(true)
       setPaymentFlowError(
-        `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} (${currencyConverter.currencyCode}: ${aiBotFeeLocal.local}) to pay from wallet.`,
+        `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} (= ${aiBotFeeLocal.local}) to pay from wallet.`,
       )
       return
     }
@@ -315,7 +315,7 @@ export function AIBotPage() {
     if (selectedMethodSafe === 'wallet') {
       if (!walletHasEnoughBalance) {
         setPaymentFlowError(
-          `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} (${currencyConverter.currencyCode}: ${aiBotFeeLocal.local}) to pay from wallet.`,
+          `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} (= ${aiBotFeeLocal.local}) to pay from wallet.`,
         )
         return
       }
@@ -560,7 +560,7 @@ export function AIBotPage() {
             </button>
           </div>
           <p className="mt-2 text-xs text-[var(--text-tertiary)]">
-            In {currencyConverter.currencyCode}: {aiBotFeeLocal.local}
+            = {aiBotFeeLocal.local}
           </p>
 
           {paymentFlowError ? (
@@ -598,7 +598,7 @@ export function AIBotPage() {
                       Send {formatUsd(config.aiBotFeeUsd)} To
                     </p>
                     <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                      In {currencyConverter.currencyCode}: {aiBotFeeLocal.local}
+                      = {aiBotFeeLocal.local}
                     </p>
                     <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">
                       {selectedNetworkOption.address}
@@ -682,7 +682,7 @@ export function AIBotPage() {
                     {formatUsd(walletBalanceSafe)}
                   </p>
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                    In {currencyConverter.currencyCode}: {walletBalanceLocal.local}
+                    = {walletBalanceLocal.local}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 py-3">
@@ -693,7 +693,7 @@ export function AIBotPage() {
                     {formatUsd(config.aiBotFeeUsd)}
                   </p>
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                    In {currencyConverter.currencyCode}: {aiBotFeeLocal.local}
+                    = {aiBotFeeLocal.local}
                   </p>
                 </div>
               </div>

@@ -465,11 +465,11 @@ export function ProfilePage() {
       'Rising Star Tier Upgrade',
       `Tier: ${selectedUpgradeTierConfig.label}`,
       `Amount USD: ${selectedUpgradeTierConfig.feeUsd.toFixed(2)}`,
-      `Amount ${currencyConverter.currencyCode}: ${selectedUpgradeTierLocal?.local || ''}`,
+      `= ${selectedUpgradeTierLocal?.local || ''}`,
       `Network: ${selectedNetworkOption.label}`,
       `Address: ${selectedNetworkOption.address}`,
     ].join('\n')
-  }, [currencyConverter.currencyCode, selectedNetworkOption, selectedUpgradeTierConfig, selectedUpgradeTierLocal])
+  }, [selectedNetworkOption, selectedUpgradeTierConfig, selectedUpgradeTierLocal])
 
   const qrImageUrl = useMemo(() => {
     if (!qrPayload) {
@@ -917,7 +917,7 @@ export function ProfilePage() {
                     >
                       {availableUpgradeTiers.map((tier) => (
                         <option key={tier.id} value={tier.id}>
-                          {tier.label} - {formatUsd(tier.feeUsd)} - In {currencyConverter.currencyCode}: {currencyConverter.formatDualFromUsd(tier.feeUsd).local}
+                          {tier.label} - {formatUsd(tier.feeUsd)} = {currencyConverter.formatDualFromUsd(tier.feeUsd).local}
                         </option>
                       ))}
                     </select>
@@ -953,7 +953,7 @@ export function ProfilePage() {
                         </p>
                         {selectedUpgradeTierLocal ? (
                           <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                            In {currencyConverter.currencyCode}: {selectedUpgradeTierLocal.local}
+                            = {selectedUpgradeTierLocal.local}
                           </p>
                         ) : null}
                         <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">

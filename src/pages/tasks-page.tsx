@@ -541,7 +541,7 @@ export function TasksPage() {
           {formatUsd(projectedReward)}
         </p>
           <p className="mt-1 text-sm text-emerald-200">
-            In {currencyConverter.currencyCode}: {projectedRewardLocal.local}
+            = {projectedRewardLocal.local}
           </p>
           {isLoading && (
             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
@@ -861,7 +861,7 @@ export function TasksPage() {
                       {formatUsd(task.reward)}
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                      In {currencyConverter.currencyCode}: {currencyConverter.formatDualFromUsd(task.reward).local}
+                      = {currencyConverter.formatDualFromUsd(task.reward).local}
                     </p>
                   </div>
                 </div>
@@ -952,7 +952,7 @@ export function TasksPage() {
                   className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition"
                 />
                 <span className="mt-2 block text-xs text-[var(--text-tertiary)]">
-                  In {currencyConverter.currencyCode}: {packAmountLocal.local}
+                  = {packAmountLocal.local}
                 </span>
               </label>
             </div>

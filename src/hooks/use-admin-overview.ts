@@ -12,6 +12,11 @@ export type AdminUserRow = {
   tier: string
   status: string
   role: 'user' | 'admin'
+  registrationVerificationStatus: 'pending' | 'verified' | 'rejected'
+  registrationPaymentReference: string
+  registrationPaymentAmountUsd: number
+  registrationPaymentSubmittedAt: string | null
+  registrationPaidAt: string | null
   aiBotStatus: 'Active' | 'Inactive'
   aiBotVerificationStatus: 'verified' | 'unverified' | 'rejected'
   aiBotPaymentTxHash: string
@@ -60,6 +65,7 @@ export type AdminStats = {
   totalTransactions: number
   pendingWithdrawals: number
   pendingTaskPacks?: number
+  pendingRegistrations?: number
 }
 
 export type AdminOverviewPayload = {
@@ -82,6 +88,7 @@ const fallbackOverview: AdminOverviewPayload = {
     totalTransactions: 0,
     pendingWithdrawals: 0,
     pendingTaskPacks: 0,
+    pendingRegistrations: 0,
   },
 }
 
@@ -109,6 +116,14 @@ function isAdminUserRow(value: unknown): value is AdminUserRow {
     typeof value.tier === 'string' &&
     typeof value.status === 'string' &&
     (value.role === 'user' || value.role === 'admin') &&
+    (value.registrationVerificationStatus === 'pending' ||
+      value.registrationVerificationStatus === 'verified' ||
+      value.registrationVerificationStatus === 'rejected') &&
+    typeof value.registrationPaymentReference === 'string' &&
+    typeof value.registrationPaymentAmountUsd === 'number' &&
+    (typeof value.registrationPaymentSubmittedAt === 'string' ||
+      value.registrationPaymentSubmittedAt === null) &&
+    (typeof value.registrationPaidAt === 'string' || value.registrationPaidAt === null) &&
     (value.aiBotStatus === 'Active' || value.aiBotStatus === 'Inactive') &&
     (value.aiBotVerificationStatus === 'verified' ||
       value.aiBotVerificationStatus === 'unverified' ||
@@ -193,6 +208,7 @@ function toAdminStats(value: unknown): AdminStats {
   const totalTransactions = Number(value.totalTransactions ?? 0)
   const pendingWithdrawals = Number(value.pendingWithdrawals ?? 0)
   const pendingTaskPacks = Number(value.pendingTaskPacks ?? 0)
+  const pendingRegistrations = Number(value.pendingRegistrations ?? 0)
 
   return {
     totalUsers: Number.isFinite(totalUsers) ? totalUsers : 0,
@@ -201,6 +217,7 @@ function toAdminStats(value: unknown): AdminStats {
     totalTransactions: Number.isFinite(totalTransactions) ? totalTransactions : 0,
     pendingWithdrawals: Number.isFinite(pendingWithdrawals) ? pendingWithdrawals : 0,
     pendingTaskPacks: Number.isFinite(pendingTaskPacks) ? pendingTaskPacks : 0,
+    pendingRegistrations: Number.isFinite(pendingRegistrations) ? pendingRegistrations : 0,
   }
 }
 
@@ -478,6 +495,65 @@ export function useAdminOverview() {
     [load],
   )
 
+  const processRegistration = useCallback(
+    async (userId: string, action: 'approve' | 'reject') => {
+      setError('')
+      setMessage('')
+      setIsBusy(true)
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/admin/registrations/${encodeURIComponent(userId)}/${action}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthorizedHeaders(),
+            },
+          },
+        )
+
+        const payload = (await response.json().catch(() => ({}))) as unknown
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            handleUnauthorized()
+          }
+
+          throw new Error(
+            extractMessage(
+              payload,
+              action === 'approve'
+                ? 'Unable to approve registration deposit'
+                : 'Unable to reject registration deposit',
+            ),
+          )
+        }
+
+        setMessage(
+          extractMessage(
+            payload,
+            action === 'approve'
+              ? 'Registration deposit approved'
+              : 'Registration deposit rejected',
+          ),
+        )
+        await load(true)
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : action === 'approve'
+              ? 'Unable to approve registration deposit'
+              : 'Unable to reject registration deposit',
+        )
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [load],
+  )
+
   return {
     overview,
     isLoading,
@@ -491,5 +567,7 @@ export function useAdminOverview() {
     rejectTaskPack: (purchaseId: string) => processTaskPack(purchaseId, 'reject'),
     verifyAIBot: (userId: string) => processAIBotVerification(userId, 'verify'),
     rejectAIBot: (userId: string) => processAIBotVerification(userId, 'reject'),
+    approveRegistration: (userId: string) => processRegistration(userId, 'approve'),
+    rejectRegistration: (userId: string) => processRegistration(userId, 'reject'),
   }
 }

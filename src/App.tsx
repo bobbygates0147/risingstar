@@ -4,11 +4,11 @@ import { AppShell } from './components/app-shell'
 import { GlobalToast } from './components/global-toast'
 import { GlobalRouteLoader } from './components/global-route-loader'
 import { GlobalLanguageTranslator } from './components/global-language-translator'
-import { isAdmin, isAuthenticated } from './lib/auth'
+import { isAdmin, isAuthenticated, isRegistrationVerified } from './lib/auth'
 import { ActivityPage } from './pages/activity-page'
 import { AdminPanelPage } from './pages/admin-panel-page'
 import { AIBotPage } from './pages/ai-bot-page'
-import { LoginPage, SignupPage, SignupPaymentPage } from './pages/auth-page'
+import { LoginPage, RegistrationPendingPage, SignupPage, SignupPaymentPage } from './pages/auth-page'
 import { DashboardPage } from './pages/dashboard-page'
 import { LeaderboardPage } from './pages/leaderboard-page'
 import { ProfilePage } from './pages/profile-page'
@@ -18,7 +18,11 @@ import { TasksPage } from './pages/tasks-page'
 import { WalletPage } from './pages/wallet-page'
 
 function getDefaultAuthenticatedRoute() {
-  return isAdmin() ? '/admin' : '/'
+  if (isAdmin()) {
+    return '/admin'
+  }
+
+  return isRegistrationVerified() ? '/' : '/registration-pending'
 }
 
 function RequireAuth() {
@@ -27,6 +31,10 @@ function RequireAuth() {
 
 function RequireAdmin() {
   return isAdmin() ? <Outlet /> : <Navigate to="/" replace />
+}
+
+function RequireVerifiedRegistration() {
+  return isRegistrationVerified() ? <Outlet /> : <Navigate to="/registration-pending" replace />
 }
 
 function RequireGuest() {
@@ -62,6 +70,8 @@ function App() {
         </Route>
 
         <Route element={<RequireAuth />}>
+          <Route path="/registration-pending" element={<RegistrationPendingPage />} />
+          <Route element={<RequireVerifiedRegistration />}>
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="/tasks" element={<TasksPage />} />
@@ -75,6 +85,7 @@ function App() {
             <Route element={<RequireAdmin />}>
               <Route path="/admin" element={<AdminPanelPage />} />
             </Route>
+          </Route>
           </Route>
         </Route>
 

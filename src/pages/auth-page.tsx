@@ -1,10 +1,14 @@
 import type { FormEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Check, Copy, Sparkles } from 'lucide-react'
+import { ArrowLeft, Check, Clock3, Copy, LogOut, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import {
   fetchSignupConfig,
+  getAuthenticatedUser,
+  isRegistrationVerified,
   login,
+  refreshAuthenticatedUser,
+  signOut,
   signup,
   type SignupConfig,
 } from '../lib/auth'
@@ -185,12 +189,19 @@ export function LoginPage() {
       showToast({
         variant: 'success',
         title: `Welcome back, ${displayName}`,
-        description: 'Your dashboard is ready. Let us hit today’s targets.',
+        description: isRegistrationVerified(authResponse.user)
+          ? 'Your dashboard is ready.'
+          : 'Your registration deposit is still waiting for admin confirmation.',
       })
 
-      navigate(authResponse.user.role === 'admin' ? '/admin' : '/', {
-        replace: true,
-      })
+      navigate(
+        authResponse.user.role === 'admin'
+          ? '/admin'
+          : isRegistrationVerified(authResponse.user)
+            ? '/'
+            : '/registration-pending',
+        { replace: true },
+      )
     } catch (requestError) {
       const message =
         requestError instanceof Error
@@ -715,14 +726,19 @@ export function SignupPaymentPage() {
       showToast({
         variant: 'success',
         title: `Welcome, ${authResponse.user.name || draft.name}`,
-        description: 'Your account is live and ready for tasks.',
+        description: 'Your deposit reference was submitted for admin confirmation.',
       })
 
       clearSignupDraft()
 
-      navigate(authResponse.user.role === 'admin' ? '/admin' : '/', {
-        replace: true,
-      })
+      navigate(
+        authResponse.user.role === 'admin'
+          ? '/admin'
+          : isRegistrationVerified(authResponse.user)
+            ? '/'
+            : '/registration-pending',
+        { replace: true },
+      )
     } catch (requestError) {
       const message =
         requestError instanceof Error
@@ -873,6 +889,120 @@ export function SignupPaymentPage() {
           {isSubmitting ? 'Please wait...' : 'Complete Signup'}
         </button>
       </form>
+    </AuthLayout>
+  )
+}
+
+export function RegistrationPendingPage() {
+  const navigate = useNavigate()
+  const [user, setUser] = useState(() => getAuthenticatedUser())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const status = user?.registrationVerificationStatus || 'pending'
+  const isRejected = status === 'rejected'
+
+  async function refreshStatus() {
+    setIsRefreshing(true)
+
+    try {
+      const refreshedUser = await refreshAuthenticatedUser()
+
+      if (!refreshedUser) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      setUser(refreshedUser)
+
+      if (refreshedUser.role === 'admin') {
+        navigate('/admin', { replace: true })
+        return
+      }
+
+      if (isRegistrationVerified(refreshedUser)) {
+        navigate('/', { replace: true })
+      }
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    void refreshStatus()
+
+    const interval = window.setInterval(() => {
+      void refreshStatus()
+    }, 10000)
+
+    return () => window.clearInterval(interval)
+  }, [])
+
+  function handleSignOut() {
+    signOut()
+    navigate('/login', { replace: true })
+  }
+
+  return (
+    <AuthLayout
+      title={isRejected ? 'Deposit Not Approved' : 'Deposit Pending'}
+      subtitle={
+        isRejected
+          ? 'Your registration payment needs another review.'
+          : 'Your account opens after admin confirms your registration deposit.'
+      }
+    >
+      <section className="surface-glow rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 text-[var(--text-primary)] shadow-[var(--shadow-panel)] backdrop-blur-xl sm:p-8">
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] text-[var(--glow)]">
+            {isRejected ? <ShieldCheck className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
+          </span>
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Registration status
+            </p>
+            <h2 className="mt-1 font-display text-2xl font-semibold">
+              {isRejected ? 'Payment needs attention' : 'Waiting for approval'}
+            </h2>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">
+          <p>
+            {isRejected
+              ? 'The submitted deposit reference was rejected. Contact support or register again with a valid payment reference.'
+              : 'Your payment reference has been submitted. An admin must confirm the deposit before your dashboard, wallet, and task queue go live.'}
+          </p>
+          {user?.registrationPaymentReference ? (
+            <p className="mt-3 break-all text-xs text-[var(--text-tertiary)]">
+              Reference: {user.registrationPaymentReference}
+            </p>
+          ) : null}
+          {typeof user?.registrationPaymentAmountUsd === 'number' && user.registrationPaymentAmountUsd > 0 ? (
+            <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+              Amount: {formatUsd(user.registrationPaymentAmountUsd)}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void refreshStatus()}
+            disabled={isRefreshing}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_18px_30px_rgba(124,58,237,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <RefreshCw className="h-4 w-4" />
+            {isRefreshing ? 'Checking...' : 'Check status'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+      </section>
     </AuthLayout>
   )
 }

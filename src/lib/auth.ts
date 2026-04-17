@@ -44,6 +44,9 @@ export type AuthUser = {
   registrationPaymentMethod?: string
   registrationPaymentReference?: string
   registrationPaymentAmountUsd?: number
+  registrationPaymentSubmittedAt?: string | null
+  registrationVerificationStatus?: 'pending' | 'verified' | 'rejected'
+  registrationVerifiedAt?: string | null
   registrationPaidAt?: string | null
   aiBotFeeUsd?: number
   aiBotEnabled?: boolean
@@ -212,6 +215,18 @@ export function isAuthenticated() {
 
 export function isAdmin() {
   return getAuthenticatedUser()?.role === 'admin'
+}
+
+export function isRegistrationVerified(user: Pick<AuthUser, 'role' | 'registrationPaidAt' | 'registrationVerificationStatus'> | null = getAuthenticatedUser()) {
+  if (!user) {
+    return false
+  }
+
+  if (user.role === 'admin') {
+    return true
+  }
+
+  return user.registrationVerificationStatus === 'verified' || Boolean(user.registrationPaidAt)
 }
 
 export function resolveUserTierId(

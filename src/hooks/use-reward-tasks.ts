@@ -89,19 +89,20 @@ const OPEN_SLOT_LIMIT_BY_TIER: Record<SignupTierId, number> = {
   tier4: readEnvInt(import.meta.env.VITE_OPEN_TASK_SLOTS_TIER4?.toString(), 8, 4, 24),
 }
 
-const TASK_REWARD_MULTIPLIER_BY_TIER: Record<SignupTierId, number> = {
-  tier1: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER1?.toString(), 0.55, 0.1, 2),
-  tier2: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER2?.toString(), 0.8, 0.1, 2),
-  tier3: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER3?.toString(), 1, 0.1, 2),
-  tier4: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER4?.toString(), 1.2, 0.1, 2),
+const REGISTRATION_FEE_BY_TIER: Record<SignupTierId, number> = {
+  tier1: readEnvFloat(import.meta.env.VITE_TIER1_REGISTRATION_FEE_USD?.toString(), 15.59, 0.01, 100000),
+  tier2: readEnvFloat(import.meta.env.VITE_TIER2_REGISTRATION_FEE_USD?.toString(), 34.99, 0.01, 100000),
+  tier3: readEnvFloat(import.meta.env.VITE_TIER3_REGISTRATION_FEE_USD?.toString(), 71.29, 0.01, 100000),
+  tier4: readEnvFloat(import.meta.env.VITE_TIER4_REGISTRATION_FEE_USD?.toString(), 119.99, 0.01, 100000),
 }
 
-const TASK_REWARD_MAX_USD = readEnvFloat(
-  import.meta.env.VITE_TASK_REWARD_MAX_USD?.toString(),
+const TASK_REWARD_BREAK_EVEN_DAYS = readEnvInt(
+  import.meta.env.VITE_TASK_REWARD_BREAK_EVEN_DAYS?.toString(),
+  30,
   1,
-  0.1,
-  10,
+  365,
 )
+const DAY_MS = 24 * 60 * 60 * 1000
 
 const ART_TASK_DURATION_SECONDS = readEnvInt(
   import.meta.env.VITE_ART_TASK_DURATION_SECONDS?.toString(),
@@ -598,10 +599,118 @@ function getOpenSlotLimitForTier(tierId: SignupTierId) {
   return OPEN_SLOT_LIMIT_BY_TIER[tierId]
 }
 
-function resolveRewardForTier(baseReward: number, tierId: SignupTierId) {
-  const multiplier = TASK_REWARD_MULTIPLIER_BY_TIER[tierId]
-  const scaled = Math.max(0, baseReward * multiplier)
-  return Number(Math.min(TASK_REWARD_MAX_USD, scaled).toFixed(2))
+function parseDayKeyMs(dayKey: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey)
+  if (!match) {
+    return Number.NaN
+  }
+
+  return Date.UTC(
+    Number.parseInt(match[1], 10),
+    Number.parseInt(match[2], 10) - 1,
+    Number.parseInt(match[3], 10),
+  )
+}
+
+function getUtcDayMs(value?: string | null) {
+  if (!value) {
+    return Number.NaN
+  }
+
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return Number.NaN
+  }
+
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+function getRewardStartDayMs(user: ReturnType<typeof getAuthenticatedUser>) {
+  const candidates = [
+    user?.registrationPaidAt,
+    user?.registrationVerifiedAt,
+    user?.registrationPaymentSubmittedAt,
+    user?.createdAt,
+  ]
+
+  for (const candidate of candidates) {
+    const dayMs = getUtcDayMs(candidate)
+
+    if (Number.isFinite(dayMs)) {
+      return dayMs
+    }
+  }
+
+  return getUtcDayMs(new Date().toISOString())
+}
+
+function getRewardDayIndex(
+  user: ReturnType<typeof getAuthenticatedUser>,
+  dayKey: string,
+) {
+  const taskDayMs = parseDayKeyMs(dayKey)
+  const startDayMs = getRewardStartDayMs(user)
+
+  if (!Number.isFinite(taskDayMs) || !Number.isFinite(startDayMs)) {
+    return 0
+  }
+
+  return Math.max(0, Math.floor((taskDayMs - startDayMs) / DAY_MS))
+}
+
+function getTierInvestmentUsd(
+  tierId: SignupTierId,
+  user: ReturnType<typeof getAuthenticatedUser>,
+) {
+  const currentTierId = resolveUserTierId(user)
+  const upgradeAmount = Number(user?.tierUpgradePaymentAmountUsd || 0)
+
+  if (currentTierId === tierId && Number.isFinite(upgradeAmount) && upgradeAmount > 0) {
+    return upgradeAmount
+  }
+
+  const registrationFee = Number(user?.registrationFeeUsd || 0)
+
+  if (currentTierId === tierId && Number.isFinite(registrationFee) && registrationFee > 0) {
+    return registrationFee
+  }
+
+  return REGISTRATION_FEE_BY_TIER[tierId]
+}
+
+function getDailyRewardBudgetCents(
+  tierId: SignupTierId,
+  user: ReturnType<typeof getAuthenticatedUser>,
+  dayKey: string,
+) {
+  const investmentCents = Math.max(0, Math.round(getTierInvestmentUsd(tierId, user) * 100))
+
+  if (investmentCents <= 0) {
+    return 0
+  }
+
+  const baseDailyCents = Math.floor(investmentCents / TASK_REWARD_BREAK_EVEN_DAYS)
+  const bonusDays = investmentCents % TASK_REWARD_BREAK_EVEN_DAYS
+  const rewardDayIndex = getRewardDayIndex(user, dayKey)
+
+  return baseDailyCents + (rewardDayIndex % TASK_REWARD_BREAK_EVEN_DAYS < bonusDays ? 1 : 0)
+}
+
+function resolveRewardForSlot(
+  tierId: SignupTierId,
+  user: ReturnType<typeof getAuthenticatedUser>,
+  dayKey: string,
+  slotIndex: number,
+) {
+  const baseDailyLimit = Math.max(1, getDailyLimitForTier(tierId))
+  const dailyBudgetCents = getDailyRewardBudgetCents(tierId, user, dayKey)
+  const baseSlotCents = Math.floor(dailyBudgetCents / baseDailyLimit)
+  const bonusSlots = dailyBudgetCents % baseDailyLimit
+  const normalizedSlotIndex = slotIndex % baseDailyLimit
+  const rewardCents =
+    baseSlotCents + (normalizedSlotIndex < bonusSlots ? 1 : 0)
+
+  return Number((Math.max(0, rewardCents) / 100).toFixed(2))
 }
 
 function formatUnlockLabel(unlockAt: Date) {
@@ -830,7 +939,7 @@ function buildPersonalizedQueue(
       ),
       status: isCompleted ? 'completed' : 'available',
       mood: resolveTaskMood(baseTask.type, baseTask.id, baseTask.title, baseTask.mood),
-      reward: resolveRewardForTier(baseTask.reward, scope.tierId),
+      reward: resolveRewardForSlot(scope.tierId, scope.user, scope.dayKey, slotIndex),
       duration: durationFromMedia ?? normalizedDuration,
       reach: buildExponentialReach(baseTask.reach, reachClickCount),
       mediaUrl,

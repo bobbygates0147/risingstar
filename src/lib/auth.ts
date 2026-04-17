@@ -51,6 +51,10 @@ export type AuthUser = {
   kycVerificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected'
   kycVerifiedAt?: string | null
   kycReference?: string
+  tierUpgradedAt?: string | null
+  tierUpgradePaymentMethod?: string
+  tierUpgradePaymentReference?: string
+  tierUpgradePaymentAmountUsd?: number
   aiBotFeeUsd?: number
   aiBotEnabled?: boolean
   aiBotPaymentMethod?: string
@@ -125,9 +129,9 @@ export type SignupPayload = {
 const fallbackSignupConfig: SignupConfig = {
   currency: 'USD',
   tiers: [
-    { id: 'tier1', label: 'Tier 1', feeUsd: 12.7 },
-    { id: 'tier2', label: 'Tier 2', feeUsd: 25.4 },
-    { id: 'tier3', label: 'Tier 3', feeUsd: 36.28 },
+    { id: 'tier1', label: 'Tier 1', feeUsd: 15.59 },
+    { id: 'tier2', label: 'Tier 2', feeUsd: 34.99 },
+    { id: 'tier3', label: 'Tier 3', feeUsd: 71.29 },
     { id: 'tier4', label: 'Tier 4', feeUsd: 119.99 },
   ],
   countries: COUNTRY_CURRENCY_OPTIONS,

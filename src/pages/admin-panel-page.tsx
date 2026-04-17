@@ -153,8 +153,8 @@ export function AdminPanelPage() {
         )}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Total Users
@@ -166,7 +166,7 @@ export function AdminPanelPage() {
           </p>
         </article>
 
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Pending Deposits
@@ -178,7 +178,7 @@ export function AdminPanelPage() {
           </p>
         </article>
 
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Active Users
@@ -190,7 +190,7 @@ export function AdminPanelPage() {
           </p>
         </article>
 
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Task Catalog
@@ -202,7 +202,7 @@ export function AdminPanelPage() {
           </p>
         </article>
 
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Payout Events
@@ -214,7 +214,7 @@ export function AdminPanelPage() {
           </p>
         </article>
 
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Pending Withdrawals
@@ -226,7 +226,7 @@ export function AdminPanelPage() {
           </p>
         </article>
 
-        <article className="rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               Pending Task Packs
@@ -239,8 +239,8 @@ export function AdminPanelPage() {
         </article>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+      <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
+        <article className="min-w-0 overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
           <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
             <Users className="h-4 w-4 text-[var(--glow)]" />
             Registered Users
@@ -252,17 +252,17 @@ export function AdminPanelPage() {
             </div>
           ) : (
             <>
-              <div className="thin-scrollbar mt-4 overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+              <div className="thin-scrollbar mt-4 max-w-full overflow-x-auto">
+                <table className="min-w-[62rem] table-fixed border-separate border-spacing-y-2 text-sm">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                      <th className="px-3 py-2 font-medium">Name</th>
-                      <th className="px-3 py-2 font-medium">Email</th>
-                      <th className="px-3 py-2 font-medium">Tier</th>
-                      <th className="px-3 py-2 font-medium">Status</th>
-                      <th className="px-3 py-2 font-medium">Registration Deposit</th>
-                      <th className="px-3 py-2 font-medium">AI Bot</th>
-                      <th className="px-3 py-2 font-medium">AI Verification</th>
+                      <th className="w-24 px-3 py-2 font-medium">Name</th>
+                      <th className="w-48 px-3 py-2 font-medium">Email</th>
+                      <th className="w-20 px-3 py-2 font-medium">Tier</th>
+                      <th className="w-24 px-3 py-2 font-medium">Status</th>
+                      <th className="w-64 px-3 py-2 font-medium">Registration Deposit</th>
+                      <th className="w-24 px-3 py-2 font-medium">AI Bot</th>
+                      <th className="w-36 px-3 py-2 font-medium">AI Verification</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -271,10 +271,10 @@ export function AdminPanelPage() {
                         key={user.id}
                         className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)]"
                       >
-                        <td className="px-3 py-3 font-medium text-[var(--text-primary)]">
+                        <td className="break-words px-3 py-3 font-medium text-[var(--text-primary)]">
                           {user.name}
                         </td>
-                        <td className="px-3 py-3 text-[var(--text-secondary)]">{user.email}</td>
+                        <td className="break-all px-3 py-3 text-[var(--text-secondary)]">{user.email}</td>
                         <td className="px-3 py-3 text-[var(--text-secondary)]">{user.tier}</td>
                         <td
                           className={`px-3 py-3 text-xs font-semibold uppercase ${statusTone(user.status)}`}
@@ -282,7 +282,7 @@ export function AdminPanelPage() {
                           {user.status}
                         </td>
                         <td className="px-3 py-3">
-                          <div className="flex min-w-48 flex-col gap-2">
+                          <div className="flex min-w-0 flex-col gap-2">
                             <span
                               className={`text-xs font-semibold uppercase ${statusTone(user.registrationVerificationStatus)}`}
                             >
@@ -395,7 +395,7 @@ export function AdminPanelPage() {
           )}
         </article>
 
-        <article className="rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
+        <article className="min-w-0 rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 shadow-[var(--shadow-panel)]">
           <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
             <CheckCircle2 className="h-4 w-4 text-emerald-300" />
             Recent Transactions

@@ -511,8 +511,8 @@ export function TasksPage() {
                 Tier-based tasks matched to your account level
               </h2>
               <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
-                Tier 1 gets music and art. Tier 2 gets social follow and join
-                tasks. Tier 3 gets ads. Tier 4 mixes everything in one queue.
+                Tier 1 starts with music and art. Tier 2 adds social follow and
+                join tasks. Tier 3 adds ads. Tier 4 keeps everything in one queue.
               </p>
             </div>
 

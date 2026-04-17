@@ -617,11 +617,11 @@ function getAllowedTaskTypesForTier(tierId: SignupTierId): RewardTask['type'][] 
   }
 
   if (tierId === 'tier3') {
-    return ['Ads']
+    return ['Music', 'Art', 'Social', 'Ads']
   }
 
   if (tierId === 'tier2') {
-    return ['Social']
+    return ['Music', 'Art', 'Social']
   }
 
   return ['Music', 'Art']
@@ -693,8 +693,12 @@ function buildPersonalizedQueue(
       ],
   )
 
-  function getMixedTypeTargetCount(taskType: RewardTask['type'], availableCount: number) {
-    if (scope.tierId !== 'tier4' || availableCount === 0 || selectedBaseTasks.length === 0) {
+  function getTypeTargetCount(taskType: RewardTask['type'], availableCount: number) {
+    if (
+      !allowedTaskTypeSet.has(taskType) ||
+      availableCount === 0 ||
+      selectedBaseTasks.length === 0
+    ) {
       return 0
     }
 
@@ -767,14 +771,8 @@ function buildPersonalizedQueue(
     }
   }
 
-  const adTargetCount =
-    scope.tierId === 'tier3'
-      ? selectedBaseTasks.length
-      : getMixedTypeTargetCount('Ads', adPool.length)
-  const socialTargetCount =
-    scope.tierId === 'tier2'
-      ? selectedBaseTasks.length
-      : getMixedTypeTargetCount('Social', socialPool.length)
+  const adTargetCount = getTypeTargetCount('Ads', adPool.length)
+  const socialTargetCount = getTypeTargetCount('Social', socialPool.length)
 
   enforceTypeMaximum('Ads', adTargetCount)
   enforceTypeMaximum('Social', socialTargetCount)

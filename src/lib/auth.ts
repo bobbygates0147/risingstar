@@ -253,7 +253,7 @@ export function canAccessAdTasks(user?: Pick<AuthUser, 'role' | 'tier'> | null) 
 
 export function canAccessSocialTasks(user?: Pick<AuthUser, 'role' | 'tier'> | null) {
   const tierId = resolveUserTierId(user)
-  return tierId === 'tier2' || tierId === 'tier4'
+  return tierId === 'tier2' || tierId === 'tier3' || tierId === 'tier4'
 }
 
 export function signOut() {

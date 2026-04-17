@@ -643,7 +643,7 @@ export function SignupPaymentPage() {
       `Tier: ${selectedTier.label}`,
       `Amount USD: ${selectedTier.feeUsd.toFixed(2)}`,
       `Country: ${paymentCurrency.country.name}`,
-      `Local estimate: ${paymentCurrency.formatDualFromUsd(selectedTier.feeUsd).local}`,
+      `Amount ${paymentCurrency.currencyCode}: ${paymentCurrency.formatDualFromUsd(selectedTier.feeUsd).local}`,
       `Network: ${selectedNetworkOption.label}`,
       `Address: ${selectedNetworkOption.address}`,
     ].join('\n')
@@ -774,7 +774,7 @@ export function SignupPaymentPage() {
 
         <p className="mt-2 text-center text-xs text-[var(--text-tertiary)]">
           Pay {formatUsd(selectedTier.feeUsd)} for {selectedTier.label} and submit your reference.
-          {paymentPrice?.usd ? ` Local estimate: ${paymentPrice.local}.` : ''}
+          {paymentPrice?.usd ? ` In ${paymentCurrency.currencyCode}: ${paymentPrice.local}.` : ''}
         </p>
 
         <div className="mt-6 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">
@@ -805,7 +805,7 @@ export function SignupPaymentPage() {
               </p>
               {paymentPrice?.usd ? (
                 <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                  Approx local value: {paymentPrice.local} in {paymentCurrency.country.name}.
+                  In {paymentCurrency.currencyCode}: {paymentPrice.local}
                 </p>
               ) : null}
               <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">

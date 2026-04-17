@@ -493,9 +493,14 @@ export function WalletPage() {
                   <p className="text-sm text-[var(--text-secondary)]">
                     Available to withdraw: {usdFormatter.format(withdrawableBalance)}
                   </p>
-                  <p className="text-xs text-[var(--text-tertiary)]">
-                    = {withdrawableBalanceLocal.local}
-                  </p>
+                  <span className="mt-2 inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-1 text-xs text-emerald-100">
+                    <span className="uppercase tracking-[0.14em] text-emerald-100/70">
+                      USD to {currencyConverter.currencyCode}
+                    </span>
+                    <span className="font-semibold text-emerald-100">
+                      {withdrawableBalanceLocal.local}
+                    </span>
+                  </span>
                 </div>
               </div>
 
@@ -508,9 +513,14 @@ export function WalletPage() {
               <p className="font-display text-4xl font-semibold text-[var(--text-primary)] sm:text-5xl">
                 {usdFormatter.format(totalBalance)}
               </p>
-              <p className="mt-2 text-sm text-emerald-200">
-                = {totalBalanceLocal.local}
-              </p>
+              <div className="mt-3 inline-flex items-center gap-3 rounded-2xl border border-emerald-300/25 bg-emerald-400/10 px-3 py-2 text-emerald-100 shadow-[0_14px_40px_rgba(16,185,129,0.16)]">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+                  USD to {currencyConverter.currencyCode}
+                </span>
+                <span className="font-display text-base font-semibold text-emerald-50">
+                  {totalBalanceLocal.local}
+                </span>
+              </div>
               
           </div>
 
@@ -592,7 +602,7 @@ export function WalletPage() {
                     {formatSignedUsd(entry.amount)}
                   </p>
                   <p className="text-xs text-[var(--text-tertiary)]">
-                    Approx {formatSignedLocalFromUsd(entry.amount)}
+                    In {currencyConverter.currencyCode}: {formatSignedLocalFromUsd(entry.amount)}
                   </p>
                   <div className="flex flex-col items-start gap-2 text-xs text-[var(--text-secondary)] sm:items-end">
                     <span
@@ -662,7 +672,7 @@ export function WalletPage() {
                     {formatSignedUsd(selectedEntry.amount)}
                   </p>
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                    Local estimate: {formatSignedLocalFromUsd(selectedEntry.amount)}
+                    In {currencyConverter.currencyCode}: {formatSignedLocalFromUsd(selectedEntry.amount)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
@@ -776,7 +786,7 @@ export function WalletPage() {
                   />
                   {withdrawAmountLocal ? (
                     <span className="mt-2 block text-xs text-[var(--text-tertiary)]">
-                      Local estimate: {withdrawAmountLocal.local}
+                      In {currencyConverter.currencyCode}: {withdrawAmountLocal.local}
                     </span>
                   ) : null}
                 </label>

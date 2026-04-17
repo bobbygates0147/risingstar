@@ -7,7 +7,7 @@ import {
   getMusicCatalogProfile,
 } from './task-catalog-metadata'
 
-export type TaskType = 'Music' | 'Ads' | 'Art'
+export type TaskType = 'Music' | 'Ads' | 'Art' | 'Social'
 export type TaskStatus = 'available' | 'live' | 'completed'
 
 export type RewardTask = {
@@ -22,6 +22,7 @@ export type RewardTask = {
   mood: string
   coverImage: string
   mediaUrl?: string
+  actionUrl?: string
   reach: string
   engagement: string
   scheduledAt?: string
@@ -32,7 +33,7 @@ export type RewardTask = {
 export type ActivityEntry = {
   id: string
   label: string
-  category: 'Music' | 'Ads' | 'Art'
+  category: 'Music' | 'Ads' | 'Art' | 'Social'
   amount: number
   time: string
   detail: string
@@ -148,11 +149,42 @@ function buildAdTasks(startIndex: number): RewardTask[] {
   })
 }
 
+function buildSocialTasks(startIndex: number): RewardTask[] {
+  const socialLinks = [
+    ['Follow Binance on X', '@binance', 'https://x.com/binance', 'Crypto exchange updates'],
+    ['Join Cointelegraph Telegram', 'Cointelegraph', 'https://t.me/cointelegraph', 'Crypto news stream'],
+    ['Follow Coinbase on Instagram', '@coinbase', 'https://www.instagram.com/coinbase/', 'Exchange education posts'],
+    ['Join CoinMarketCap Announcements', 'CoinMarketCap', 'https://t.me/CoinMarketCapAnnouncements', 'Market listings'],
+    ['Follow Solana on X', '@solana', 'https://x.com/solana', 'Ecosystem updates'],
+    ['Follow CoinGecko on Instagram', '@coingecko', 'https://www.instagram.com/coingecko/', 'Crypto charts'],
+  ] as const
+
+  return socialLinks.map(([title, account, actionUrl, mood], index) => {
+    const globalIndex = startIndex + index
+
+    return {
+      id: `social-${index + 1}`,
+      title,
+      artist: `Social - ${account}`,
+      duration: secondsToDuration(12 + (index % 4) * 3),
+      reward: Number((0.38 + (index % 6) * 0.04).toFixed(2)),
+      type: 'Social',
+      status: statusFromIndex(globalIndex),
+      mood,
+      coverImage: MUSIC_COVER_ASSETS[(index + 3) % MUSIC_COVER_ASSETS.length] || '/images/mc6.jpg',
+      actionUrl,
+      reach: reachFromIndex(globalIndex),
+      engagement: engagementFromIndex(globalIndex + 4),
+    } satisfies RewardTask
+  })
+}
+
 const musicTasks = buildMusicTasks()
 const artTasks = buildArtTasks(musicTasks.length)
-const adTasks = buildAdTasks(musicTasks.length + artTasks.length)
+const socialTasks = buildSocialTasks(musicTasks.length + artTasks.length)
+const adTasks = buildAdTasks(musicTasks.length + artTasks.length + socialTasks.length)
 
-export const rewardTasks: RewardTask[] = [...musicTasks, ...artTasks, ...adTasks]
+export const rewardTasks: RewardTask[] = [...musicTasks, ...artTasks, ...socialTasks, ...adTasks]
 
 const liveCount = rewardTasks.filter((task) => task.status !== 'completed').length
 const completedCount = rewardTasks.filter((task) => task.status === 'completed').length

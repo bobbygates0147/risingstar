@@ -6,6 +6,7 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  Gift,
   Headphones,
   LayoutDashboard,
   LogOut,
@@ -14,6 +15,7 @@ import {
   Shield,
   Sparkles,
   SunMedium,
+  Trophy,
   UserRound,
   Wallet,
 } from 'lucide-react'
@@ -47,6 +49,8 @@ const baseNavigationItems: NavigationItem[] = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard, mobileLabel: 'Home' },
   { label: 'Tasks', href: '/tasks', icon: Headphones, mobileLabel: 'Tasks' },
   { label: 'Wallet', href: '/wallet', icon: Wallet, mobileLabel: 'Wallet' },
+  { label: 'Referrals', href: '/referrals', icon: Gift, mobileLabel: 'Invite' },
+  { label: 'Leadership', href: '/leaderboard', icon: Trophy, mobileLabel: 'Rank' },
   { label: 'Activity', href: '/activity', icon: Activity, mobileLabel: 'Log' },
   { label: 'Profile', href: '/profile', icon: UserRound, mobileLabel: 'Me' },
 ]

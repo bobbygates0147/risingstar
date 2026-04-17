@@ -1,7 +1,10 @@
 ﻿import clsx from 'clsx'
 import {
   ArrowUpRight,
+  Clapperboard,
   Disc3,
+  Palette,
+  Send,
   Wallet,
   X,
 } from 'lucide-react'
@@ -13,10 +16,11 @@ import {
   getAuthenticatedUser,
   getAuthorizedHeaders,
 } from '../lib/auth'
+import { useCurrencyConverter } from '../hooks/use-currency-converter'
 import { showToast } from '../lib/toast'
 
 type WalletStatus = 'Completed' | 'Pending' | 'Failed'
-type WalletEntryKind = 'withdrawal' | 'music'
+type WalletEntryKind = 'withdrawal' | 'music' | 'ads' | 'art' | 'social'
 
 type WalletEntry = {
   id: string
@@ -81,6 +85,19 @@ function entryIcon(kind: WalletEntryKind) {
   if (kind === 'withdrawal') {
     return ArrowUpRight
   }
+
+  if (kind === 'ads') {
+    return Clapperboard
+  }
+
+  if (kind === 'art') {
+    return Palette
+  }
+
+  if (kind === 'social') {
+    return Send
+  }
+
   return Disc3
 }
 
@@ -116,7 +133,13 @@ function isWalletStatus(value: unknown): value is WalletStatus {
 }
 
 function isWalletEntryKind(value: unknown): value is WalletEntryKind {
-  return value === 'withdrawal' || value === 'music'
+  return (
+    value === 'withdrawal' ||
+    value === 'music' ||
+    value === 'ads' ||
+    value === 'art' ||
+    value === 'social'
+  )
 }
 
 function isCryptoNetwork(value: unknown): value is CryptoNetwork {
@@ -198,9 +221,6 @@ export function WalletPage() {
   const [totalBalance, setTotalBalance] = useState(
     Number(authenticatedUser?.walletBalance || 0),
   )
-  const [usdtBalance, setUsdtBalance] = useState(
-    Number(authenticatedUser?.walletBalance || 0),
-  )
   const [withdrawableBalance, setWithdrawableBalance] = useState(
     Number(authenticatedUser?.withdrawableBalance || 0),
   )
@@ -211,6 +231,7 @@ export function WalletPage() {
   const [withdrawError, setWithdrawError] = useState('')
   const [historyLoading, setHistoryLoading] = useState(true)
   const entriesPageCount = Math.max(1, Math.ceil(entries.length / PAGE_SIZE))
+  const currencyConverter = useCurrencyConverter(authenticatedUser?.countryCode)
 
   useEffect(() => {
     setEntriesPage((current) => Math.min(current, entriesPageCount))
@@ -235,7 +256,6 @@ export function WalletPage() {
       const nextBalance = Number(data.wallet?.balance || 0)
       const nextWithdrawable = Number(data.wallet?.withdrawable || 0)
       setTotalBalance(nextBalance)
-      setUsdtBalance(nextBalance)
       setWithdrawableBalance(nextWithdrawable)
       setLastSummaryUpdatedAt(new Date())
     } catch {
@@ -244,7 +264,6 @@ export function WalletPage() {
         getAuthenticatedUser()?.withdrawableBalance || 0,
       )
       setTotalBalance(fallbackBalance)
-      setUsdtBalance(fallbackBalance)
       setWithdrawableBalance(fallbackWithdrawable)
       setLastSummaryUpdatedAt(new Date())
     }
@@ -296,6 +315,19 @@ export function WalletPage() {
     const startIndex = (entriesPage - 1) * PAGE_SIZE
     return entries.slice(startIndex, startIndex + PAGE_SIZE)
   }, [entries, entriesPage])
+  const totalBalanceLocal = currencyConverter.formatDualFromUsd(totalBalance)
+  const withdrawableBalanceLocal = currencyConverter.formatDualFromUsd(withdrawableBalance)
+
+  function formatSignedLocalFromUsd(value: number) {
+    const sign = value >= 0 ? '+' : '-'
+    const pair = currencyConverter.formatDualFromUsd(Math.abs(value))
+    return `${sign}${pair.local}`
+  }
+  const withdrawAmountValue = Number(withdrawAmount)
+  const withdrawAmountLocal =
+    Number.isFinite(withdrawAmountValue) && withdrawAmountValue > 0
+      ? currencyConverter.formatDualFromUsd(withdrawAmountValue)
+      : null
 
   const lastUpdatedLabel = useMemo(() => {
     if (!lastSummaryUpdatedAt) {
@@ -461,6 +493,9 @@ export function WalletPage() {
                   <p className="text-sm text-[var(--text-secondary)]">
                     Available to withdraw: {usdFormatter.format(withdrawableBalance)}
                   </p>
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    Local estimate: {withdrawableBalanceLocal.local}
+                  </p>
                 </div>
               </div>
 
@@ -474,7 +509,10 @@ export function WalletPage() {
                 {usdFormatter.format(totalBalance)}
               </p>
               <p className="mt-2 text-sm text-emerald-200">
-                ≈ {usdFormatter.format(usdtBalance)} USDT
+                Approx {totalBalanceLocal.local} local
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                Global balance remains USD / USDT
               </p>
               
           </div>
@@ -556,6 +594,9 @@ export function WalletPage() {
                   >
                     {formatSignedUsd(entry.amount)}
                   </p>
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    Approx {formatSignedLocalFromUsd(entry.amount)}
+                  </p>
                   <div className="flex flex-col items-start gap-2 text-xs text-[var(--text-secondary)] sm:items-end">
                     <span
                       className={clsx(
@@ -622,6 +663,9 @@ export function WalletPage() {
                   </p>
                   <p className="mt-2 font-display text-xl font-semibold text-[var(--text-primary)]">
                     {formatSignedUsd(selectedEntry.amount)}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    Local estimate: {formatSignedLocalFromUsd(selectedEntry.amount)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
@@ -733,6 +777,11 @@ export function WalletPage() {
                     onChange={(event) => setWithdrawAmount(event.target.value)}
                     className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--border-strong)]"
                   />
+                  {withdrawAmountLocal ? (
+                    <span className="mt-2 block text-xs text-[var(--text-tertiary)]">
+                      Local estimate: {withdrawAmountLocal.local}
+                    </span>
+                  ) : null}
                 </label>
 
                 <label className="block text-sm text-[var(--text-secondary)]">

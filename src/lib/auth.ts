@@ -1,16 +1,17 @@
 import { getDefaultCryptoWalletInstructions } from './crypto-wallets'
+import { API_BASE_URL } from './api-base'
+import {
+  COUNTRY_CURRENCY_OPTIONS,
+  type CountryCurrencyOption,
+} from './country-currency'
 import { getBrowserTimeZone } from './timezone'
 
 const AUTH_TOKEN_KEY = 'rising-star-auth-token'
 const AUTH_USER_KEY = 'rising-star-auth-user'
 export const AUTH_USER_UPDATED_EVENT = 'rising-star:auth-user-updated'
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL?.toString() || 'http://localhost:4000'
-).replace(/\/$/, '')
-
 type UserRole = 'user' | 'admin'
-export type SignupTierId = 'tier1' | 'tier2' | 'tier3'
+export type SignupTierId = 'tier1' | 'tier2' | 'tier3' | 'tier4'
 type SignupPaymentMethod = 'crypto'
 
 export type AuthUser = {
@@ -20,6 +21,10 @@ export type AuthUser = {
   role: UserRole
   phone?: string
   country?: string
+  countryCode?: string
+  currency?: string
+  currencyName?: string
+  currencySymbol?: string
   bio?: string
   language?: string
   timezone?: string
@@ -55,6 +60,8 @@ export type AuthUser = {
   aiBotNextCheckpointAt?: string | null
   aiBotDailyRunsDate?: string
   aiBotDailyRunsCount?: number
+  referralCode?: string
+  referredBy?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -70,6 +77,8 @@ export type SignupTier = {
   feeUsd: number
 }
 
+export type SignupCountryOption = CountryCurrencyOption
+
 export type SignupPaymentInstructions = {
   crypto: {
     btcAddress: string
@@ -84,6 +93,7 @@ export type SignupPaymentInstructions = {
 export type SignupConfig = {
   currency: 'USD'
   tiers: SignupTier[]
+  countries: SignupCountryOption[]
   paymentMethods: SignupPaymentMethod[]
   aiBotFeeUsd: number
   paymentInstructions: SignupPaymentInstructions
@@ -97,6 +107,12 @@ export type SignupPayload = {
   paymentMethod: SignupPaymentMethod
   paymentReference: string
   paymentAmountUsd: number
+  country: string
+  countryCode: string
+  currency: string
+  currencyName?: string
+  currencySymbol?: string
+  referralCode?: string
   timezone?: string
 }
 
@@ -106,7 +122,9 @@ const fallbackSignupConfig: SignupConfig = {
     { id: 'tier1', label: 'Tier 1', feeUsd: 12.7 },
     { id: 'tier2', label: 'Tier 2', feeUsd: 25.4 },
     { id: 'tier3', label: 'Tier 3', feeUsd: 36.28 },
+    { id: 'tier4', label: 'Tier 4', feeUsd: 119.99 },
   ],
+  countries: COUNTRY_CURRENCY_OPTIONS,
   paymentMethods: ['crypto'],
   aiBotFeeUsd: 18.14,
   paymentInstructions: {
@@ -200,7 +218,7 @@ export function resolveUserTierId(
   user?: Pick<AuthUser, 'role' | 'tier'> | null,
 ): SignupTierId {
   if (user?.role === 'admin') {
-    return 'tier3'
+    return 'tier4'
   }
 
   const normalizedTier = user?.tier?.toString().trim().toLowerCase()
@@ -217,6 +235,10 @@ export function resolveUserTierId(
     return 'tier3'
   }
 
+  if (normalizedTier === 'tier4' || normalizedTier === '4' || normalizedTier === 'tier 4') {
+    return 'tier4'
+  }
+
   return 'tier1'
 }
 
@@ -226,7 +248,12 @@ export function getCurrentUserTierId() {
 
 export function canAccessAdTasks(user?: Pick<AuthUser, 'role' | 'tier'> | null) {
   const tierId = resolveUserTierId(user)
-  return tierId === 'tier2' || tierId === 'tier3'
+  return tierId === 'tier3' || tierId === 'tier4'
+}
+
+export function canAccessSocialTasks(user?: Pick<AuthUser, 'role' | 'tier'> | null) {
+  const tierId = resolveUserTierId(user)
+  return tierId === 'tier2' || tierId === 'tier4'
 }
 
 export function signOut() {
@@ -286,7 +313,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function signup(payload: SignupPayload) {
-  return authRequest('signup', {
+  const signupPayload: Record<string, string> = {
     name: payload.name,
     email: payload.email,
     password: payload.password,
@@ -294,8 +321,19 @@ export async function signup(payload: SignupPayload) {
     paymentMethod: payload.paymentMethod,
     paymentReference: payload.paymentReference,
     paymentAmountUsd: payload.paymentAmountUsd.toFixed(2),
+    country: payload.country,
+    countryCode: payload.countryCode,
+    currency: payload.currency,
+    currencyName: payload.currencyName || payload.currency,
+    currencySymbol: payload.currencySymbol || payload.currency,
     timezone: payload.timezone || getBrowserTimeZone(),
-  })
+  }
+
+  if (payload.referralCode?.trim()) {
+    signupPayload.referralCode = payload.referralCode.trim()
+  }
+
+  return authRequest('signup', signupPayload)
 }
 
 export async function refreshAuthenticatedUser() {
@@ -334,7 +372,7 @@ function isSignupTier(value: unknown): value is SignupTier {
 
   const tier = value as Record<string, unknown>
   return (
-    (tier.id === 'tier1' || tier.id === 'tier2' || tier.id === 'tier3') &&
+    (tier.id === 'tier1' || tier.id === 'tier2' || tier.id === 'tier3' || tier.id === 'tier4') &&
     typeof tier.label === 'string' &&
     typeof tier.feeUsd === 'number'
   )
@@ -342,6 +380,24 @@ function isSignupTier(value: unknown): value is SignupTier {
 
 function isPaymentMethod(value: unknown): value is SignupPaymentMethod {
   return value === 'crypto'
+}
+
+function isSignupCountryOption(value: unknown): value is SignupCountryOption {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const country = value as Record<string, unknown>
+
+  return (
+    typeof country.code === 'string' &&
+    typeof country.name === 'string' &&
+    typeof country.currency === 'string' &&
+    typeof country.currencyName === 'string' &&
+    typeof country.currencySymbol === 'string' &&
+    typeof country.locale === 'string' &&
+    typeof country.phoneCode === 'string'
+  )
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -366,6 +422,10 @@ export async function fetchSignupConfig(): Promise<SignupConfig> {
       ? data.paymentMethods.filter(isPaymentMethod)
       : fallbackSignupConfig.paymentMethods
 
+    const countries = Array.isArray(data.countries)
+      ? data.countries.filter(isSignupCountryOption)
+      : fallbackSignupConfig.countries
+
     const aiBotFeeUsd =
       typeof data.aiBotFeeUsd === 'number'
         ? data.aiBotFeeUsd
@@ -378,6 +438,10 @@ export async function fetchSignupConfig(): Promise<SignupConfig> {
     return {
       currency: 'USD',
       tiers: tiers.length > 0 ? tiers : fallbackSignupConfig.tiers,
+      countries:
+        countries.length > 0
+          ? countries
+          : fallbackSignupConfig.countries,
       paymentMethods:
         paymentMethods.length > 0
           ? paymentMethods

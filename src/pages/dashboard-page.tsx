@@ -8,6 +8,7 @@ import {
   Clock3,
   Heart,
   Play,
+  Send,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -38,6 +39,10 @@ function getPreviewActionLabel(taskType: TaskType) {
     return 'Like'
   }
 
+  if (taskType === 'Social') {
+    return 'Follow'
+  }
+
   return 'Play'
 }
 
@@ -48,6 +53,10 @@ function getPreviewActionIcon(taskType: TaskType) {
 
   if (taskType === 'Art') {
     return Heart
+  }
+
+  if (taskType === 'Social') {
+    return Send
   }
 
   return Play

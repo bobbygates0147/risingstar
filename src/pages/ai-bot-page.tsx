@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAIBot } from '../hooks/use-ai-bot'
+import { useCurrencyConverter } from '../hooks/use-currency-converter'
 import { getAuthenticatedUser } from '../lib/auth'
 import { formatUsd } from '../lib/format'
 import { showToast } from '../lib/toast'
@@ -93,6 +94,8 @@ export function AIBotPage() {
   const lastMessageRef = useRef('')
   const lastErrorRef = useRef('')
   const isOffline = isLocalMode
+  const user = getAuthenticatedUser()
+  const currencyConverter = useCurrencyConverter(user?.countryCode)
   const proofFileSizeLabel = paymentProofFile
     ? `${(paymentProofFile.size / (1024 * 1024)).toFixed(2)} MB`
     : ''
@@ -134,6 +137,8 @@ export function AIBotPage() {
     return networkOptions.find((option) => option.key === selectedNetwork) || networkOptions[0]
   }, [networkOptions, selectedNetwork])
 
+  const aiBotFeeLocal = currencyConverter.formatDualFromUsd(config.aiBotFeeUsd)
+
   const qrPayload = useMemo(() => {
     if (!selectedNetworkOption) {
       return ''
@@ -142,10 +147,11 @@ export function AIBotPage() {
     return [
       'Rising Star AI Bot Payment',
       `Amount USD: ${config.aiBotFeeUsd.toFixed(2)}`,
+      `Local estimate: ${aiBotFeeLocal.local}`,
       `Network: ${selectedNetworkOption.label}`,
       `Address: ${selectedNetworkOption.address}`,
     ].join('\n')
-  }, [config.aiBotFeeUsd, selectedNetworkOption])
+  }, [aiBotFeeLocal.local, config.aiBotFeeUsd, selectedNetworkOption])
 
   const qrImageUrl = useMemo(() => {
     if (!qrPayload) {
@@ -159,9 +165,9 @@ export function AIBotPage() {
     setQrLoadError(false)
   }, [qrImageUrl])
 
-  const user = getAuthenticatedUser()
   const walletBalance = Number(user?.walletBalance ?? 0)
   const walletBalanceSafe = Number.isFinite(walletBalance) ? walletBalance : 0
+  const walletBalanceLocal = currencyConverter.formatDualFromUsd(walletBalanceSafe)
   const walletHasEnoughBalance = walletBalanceSafe >= config.aiBotFeeUsd
 
   const constraints = [
@@ -295,7 +301,7 @@ export function AIBotPage() {
     if (selectedMethodSafe === 'wallet' && !walletHasEnoughBalance) {
       setPaymentFlowOpen(true)
       setPaymentFlowError(
-        `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} to pay from wallet.`,
+        `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} (Approx ${aiBotFeeLocal.local}) to pay from wallet.`,
       )
       return
     }
@@ -309,7 +315,7 @@ export function AIBotPage() {
     if (selectedMethodSafe === 'wallet') {
       if (!walletHasEnoughBalance) {
         setPaymentFlowError(
-          `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} to pay from wallet.`,
+          `Insufficient wallet balance. You need ${formatUsd(config.aiBotFeeUsd)} (Approx ${aiBotFeeLocal.local}) to pay from wallet.`,
         )
         return
       }
@@ -553,6 +559,9 @@ export function AIBotPage() {
               {`Pay ${formatUsd(config.aiBotFeeUsd)}`}
             </button>
           </div>
+          <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+            Approx {aiBotFeeLocal.local} local
+          </p>
 
           {paymentFlowError ? (
             <p className="mt-4 rounded-xl border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -587,6 +596,9 @@ export function AIBotPage() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
                       Send {formatUsd(config.aiBotFeeUsd)} To
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                      Local estimate: {aiBotFeeLocal.local}
                     </p>
                     <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">
                       {selectedNetworkOption.address}
@@ -652,7 +664,7 @@ export function AIBotPage() {
                 />
                 {paymentProofFile && (
                   <p className="mt-2 text-xs text-[var(--text-tertiary)]">
-                    Selected: {paymentProofFile.name} • {proofFileSizeLabel}
+                    Selected: {paymentProofFile.name} - {proofFileSizeLabel}
                   </p>
                 )}
               </label>
@@ -669,6 +681,9 @@ export function AIBotPage() {
                   <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">
                     {formatUsd(walletBalanceSafe)}
                   </p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    Approx {walletBalanceLocal.local} local
+                  </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] px-4 py-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
@@ -676,6 +691,9 @@ export function AIBotPage() {
                   </p>
                   <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">
                     {formatUsd(config.aiBotFeeUsd)}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    Approx {aiBotFeeLocal.local} local
                   </p>
                 </div>
               </div>

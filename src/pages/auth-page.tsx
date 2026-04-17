@@ -1,6 +1,6 @@
 import type { FormEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Check, Copy, Sparkles } from 'lucide-react'
 import {
   fetchSignupConfig,
@@ -8,10 +8,16 @@ import {
   signup,
   type SignupConfig,
 } from '../lib/auth'
+import { useCurrencyConverter } from '../hooks/use-currency-converter'
+import {
+  COUNTRY_CURRENCY_OPTIONS,
+  DEFAULT_COUNTRY_CODE,
+  getCountryOptionByCode,
+} from '../lib/country-currency'
 import { formatUsd } from '../lib/format'
 import { showToast } from '../lib/toast'
 
-type SignupTierId = 'tier1' | 'tier2' | 'tier3'
+type SignupTierId = 'tier1' | 'tier2' | 'tier3' | 'tier4'
 type SignupPaymentMethod = 'crypto'
 
 type SignupDraft = {
@@ -20,12 +26,26 @@ type SignupDraft = {
   password: string
   tier: SignupTierId
   paymentMethod: SignupPaymentMethod
+  country: string
+  countryCode: string
+  currency: string
+  currencyName: string
+  currencySymbol: string
+  referralCode?: string
 }
 
 const SIGNUP_DRAFT_STORAGE_KEY = 'rising-star-signup-draft'
 
 const paymentMethodLabels: Record<SignupPaymentMethod, string> = {
   crypto: 'Crypto Wallet',
+}
+
+function normalizeReferralCode(value: string | null | undefined) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 24)
 }
 
 type CryptoNetworkKey =
@@ -62,13 +82,26 @@ function readSignupDraft() {
       !parsed?.name ||
       !parsed?.email ||
       !parsed?.password ||
-      (parsed.tier !== 'tier1' && parsed.tier !== 'tier2' && parsed.tier !== 'tier3') ||
+      (parsed.tier !== 'tier1' &&
+        parsed.tier !== 'tier2' &&
+        parsed.tier !== 'tier3' &&
+        parsed.tier !== 'tier4') ||
       parsed.paymentMethod !== 'crypto'
     ) {
       return null
     }
 
-    return parsed
+    const country = getCountryOptionByCode(parsed.countryCode)
+
+    return {
+      ...parsed,
+      country: parsed.country?.trim() || country.name,
+      countryCode: country.code,
+      currency: parsed.currency?.trim() || country.currency,
+      currencyName: parsed.currencyName?.trim() || country.currencyName,
+      currencySymbol: parsed.currencySymbol?.trim() || country.currencySymbol,
+      referralCode: normalizeReferralCode(parsed.referralCode),
+    }
   } catch {
     return null
   }
@@ -239,15 +272,29 @@ export function LoginPage() {
 
 export function SignupPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const referralCodeFromUrl = normalizeReferralCode(searchParams.get('ref'))
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [referralCode, setReferralCode] = useState(referralCodeFromUrl)
+  const [selectedCountryCode, setSelectedCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [selectedTier, setSelectedTier] = useState<SignupTierId>('tier1')
   const [paymentMethod, setPaymentMethod] = useState<SignupPaymentMethod>('crypto')
   const [signupConfig, setSignupConfig] = useState<SignupConfig | null>(null)
   const [isLoadingSignupConfig, setIsLoadingSignupConfig] = useState(false)
   const [error, setError] = useState('')
+  const countryOptions = signupConfig?.countries.length
+    ? signupConfig.countries
+    : COUNTRY_CURRENCY_OPTIONS
+  const currencyConverter = useCurrencyConverter(selectedCountryCode, countryOptions)
+
+  useEffect(() => {
+    if (referralCodeFromUrl) {
+      setReferralCode(referralCodeFromUrl)
+    }
+  }, [referralCodeFromUrl])
 
   useEffect(() => {
     let isMounted = true
@@ -281,6 +328,9 @@ export function SignupPage() {
   }, [])
 
   const selectedTierConfig = signupConfig?.tiers.find((tier) => tier.id === selectedTier)
+  const selectedTierPrice = selectedTierConfig
+    ? currencyConverter.formatDualFromUsd(selectedTierConfig.feeUsd)
+    : null
 
   function handleContinue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -317,6 +367,12 @@ export function SignupPage() {
       password,
       tier: selectedTier,
       paymentMethod,
+      country: currencyConverter.country.name,
+      countryCode: currencyConverter.country.code,
+      currency: currencyConverter.country.currency,
+      currencyName: currencyConverter.country.currencyName,
+      currencySymbol: currencyConverter.country.currencySymbol,
+      referralCode: normalizeReferralCode(referralCode),
     })
 
     navigate('/signup/payment')
@@ -362,6 +418,46 @@ export function SignupPage() {
           </label>
 
           <label className="block">
+            <span className="text-sm font-medium text-[var(--text-secondary)]">Country</span>
+            <select
+              value={currencyConverter.country.code}
+              onChange={(event) => setSelectedCountryCode(event.target.value)}
+              className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-[var(--text-primary)] outline-none transition focus:border-[var(--border-strong)] focus:bg-[var(--surface-hover)]"
+            >
+              {currencyConverter.countryOptions.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-2 block text-xs text-[var(--text-tertiary)]">
+              Currency auto-selected: {currencyConverter.currencyCode} (
+              {currencyConverter.currencyName}) using{' '}
+              {currencyConverter.ratesSource === 'live' ? 'live' : 'fallback'} rates.
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-[var(--text-secondary)]">
+              Referral code
+            </span>
+            <input
+              type="text"
+              value={referralCode}
+              onChange={(event) =>
+                setReferralCode(normalizeReferralCode(event.target.value))
+              }
+              placeholder="Invite code, optional"
+              className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--border-strong)] focus:bg-[var(--surface-hover)]"
+            />
+            {referralCode ? (
+              <span className="mt-2 block text-xs text-emerald-300">
+                Invite code applied. Milestone credit starts after activation.
+              </span>
+            ) : null}
+          </label>
+
+          <label className="block">
             <span className="text-sm font-medium text-[var(--text-secondary)]">Password</span>
             <input
               type="password"
@@ -397,7 +493,10 @@ export function SignupPage() {
             >
               {signupConfig?.tiers.map((tier) => (
                 <option key={tier.id} value={tier.id}>
-                  {tier.label} - {formatUsd(tier.feeUsd)}
+                  {tier.label} - {currencyConverter.formatDualFromUsd(tier.feeUsd).local}
+                  {currencyConverter.currencyCode === 'USD'
+                    ? ''
+                    : ` (${formatUsd(tier.feeUsd)})`}
                 </option>
               ))}
             </select>
@@ -416,10 +515,15 @@ export function SignupPage() {
           {selectedTierConfig && (
             <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">
               <p className="font-medium text-[var(--text-primary)]">
-                Registration fee: {formatUsd(selectedTierConfig.feeUsd)}
+                Registration fee: {selectedTierPrice?.local}
+                {selectedTierPrice?.usd ? ` (${selectedTierPrice.usd})` : ''}
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-                Currency: USD
+                Currency: {currencyConverter.currencyCode}
+                {currencyConverter.isRatesLoading ? ' - loading rates' : ''}
+              </p>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+                Crypto payment is still submitted against the USD registration amount.
               </p>
             </div>
           )}
@@ -463,6 +567,7 @@ export function SignupPaymentPage() {
   const [error, setError] = useState('')
   const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const paymentCurrency = useCurrencyConverter(draft?.countryCode || DEFAULT_COUNTRY_CODE)
 
   useEffect(() => {
     let isMounted = true
@@ -500,6 +605,9 @@ export function SignupPaymentPage() {
 
     return signupConfig.tiers.find((tier) => tier.id === draft.tier) || null
   }, [signupConfig, draft])
+  const paymentPrice = selectedTier
+    ? paymentCurrency.formatDualFromUsd(selectedTier.feeUsd)
+    : null
 
   const cryptoInstructions = signupConfig?.paymentInstructions.crypto
   const networkOptions = useMemo(() => {
@@ -534,10 +642,12 @@ export function SignupPaymentPage() {
       'Rising Star Signup Payment',
       `Tier: ${selectedTier.label}`,
       `Amount USD: ${selectedTier.feeUsd.toFixed(2)}`,
+      `Country: ${paymentCurrency.country.name}`,
+      `Local estimate: ${paymentCurrency.formatDualFromUsd(selectedTier.feeUsd).local}`,
       `Network: ${selectedNetworkOption.label}`,
       `Address: ${selectedNetworkOption.address}`,
     ].join('\n')
-  }, [selectedNetworkOption, selectedTier])
+  }, [paymentCurrency, selectedNetworkOption, selectedTier])
 
   const qrImageUrl = useMemo(() => {
     if (!qrPayload) {
@@ -594,6 +704,12 @@ export function SignupPaymentPage() {
         paymentMethod: draft.paymentMethod,
         paymentReference: paymentReference.trim(),
         paymentAmountUsd: selectedTier.feeUsd,
+        country: draft.country,
+        countryCode: draft.countryCode,
+        currency: draft.currency,
+        currencyName: draft.currencyName,
+        currencySymbol: draft.currencySymbol,
+        referralCode: draft.referralCode,
       })
 
       showToast({
@@ -658,6 +774,7 @@ export function SignupPaymentPage() {
 
         <p className="mt-2 text-center text-xs text-[var(--text-tertiary)]">
           Pay {formatUsd(selectedTier.feeUsd)} for {selectedTier.label} and submit your reference.
+          {paymentPrice?.usd ? ` Local estimate: ${paymentPrice.local}.` : ''}
         </p>
 
         <div className="mt-6 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">
@@ -686,6 +803,11 @@ export function SignupPaymentPage() {
               <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
                 Send {formatUsd(selectedTier.feeUsd)} To
               </p>
+              {paymentPrice?.usd ? (
+                <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                  Approx local value: {paymentPrice.local} in {paymentCurrency.country.name}.
+                </p>
+              ) : null}
               <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">
                 {selectedNetworkOption.address}
               </p>

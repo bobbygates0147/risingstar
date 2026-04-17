@@ -9,7 +9,6 @@ import {
 } from '../data/task-catalog-metadata'
 import { isAIBotAutomationActiveForUser } from '../lib/ai-bot-state'
 import {
-  canAccessAdTasks,
   getAuthenticatedUser,
   getAuthorizedHeaders,
   refreshAuthenticatedUser,
@@ -43,6 +42,7 @@ const typeCoverFallback: Record<RewardTask['type'], string> = {
   Music: '/images/mc1.jpg',
   Art: '/arts/7788954.jpg',
   Ads: '/images/mc20.jpg',
+  Social: '/images/mc6.jpg',
 }
 
 const adDummyCovers = ['/images/mc20.jpg', '/images/mc21.webp', '/images/mc22.webp']
@@ -79,18 +79,21 @@ const DAILY_LIMIT_BY_TIER: Record<SignupTierId, number> = {
   tier1: readEnvInt(import.meta.env.VITE_DAILY_TASK_LIMIT_TIER1?.toString(), 8, 3, 40),
   tier2: readEnvInt(import.meta.env.VITE_DAILY_TASK_LIMIT_TIER2?.toString(), 12, 4, 60),
   tier3: readEnvInt(import.meta.env.VITE_DAILY_TASK_LIMIT_TIER3?.toString(), 16, 6, 80),
+  tier4: readEnvInt(import.meta.env.VITE_DAILY_TASK_LIMIT_TIER4?.toString(), 22, 8, 120),
 }
 
 const OPEN_SLOT_LIMIT_BY_TIER: Record<SignupTierId, number> = {
   tier1: readEnvInt(import.meta.env.VITE_OPEN_TASK_SLOTS_TIER1?.toString(), 3, 1, 8),
   tier2: readEnvInt(import.meta.env.VITE_OPEN_TASK_SLOTS_TIER2?.toString(), 4, 2, 12),
   tier3: readEnvInt(import.meta.env.VITE_OPEN_TASK_SLOTS_TIER3?.toString(), 6, 3, 16),
+  tier4: readEnvInt(import.meta.env.VITE_OPEN_TASK_SLOTS_TIER4?.toString(), 8, 4, 24),
 }
 
 const TASK_REWARD_MULTIPLIER_BY_TIER: Record<SignupTierId, number> = {
   tier1: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER1?.toString(), 0.55, 0.1, 2),
   tier2: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER2?.toString(), 0.8, 0.1, 2),
   tier3: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER3?.toString(), 1, 0.1, 2),
+  tier4: readEnvFloat(import.meta.env.VITE_TASK_REWARD_MULTIPLIER_TIER4?.toString(), 1.2, 0.1, 2),
 }
 
 const TASK_REWARD_MAX_USD = readEnvFloat(
@@ -134,7 +137,7 @@ function handleUnauthorized() {
 }
 
 function isTaskType(value: unknown): value is RewardTask['type'] {
-  return value === 'Music' || value === 'Ads' || value === 'Art'
+  return value === 'Music' || value === 'Ads' || value === 'Art' || value === 'Social'
 }
 
 function isTaskStatus(value: unknown): value is RewardTask['status'] {
@@ -351,6 +354,10 @@ function toRewardTask(value: unknown): RewardTask | null {
     typeof item.mediaUrl === 'string' && item.mediaUrl.trim().length > 0
       ? sanitizeMediaUrl(item.mediaUrl)
       : undefined
+  const actionUrl =
+    typeof item.actionUrl === 'string' && item.actionUrl.trim().length > 0
+      ? item.actionUrl.trim()
+      : undefined
 
   const title = resolveTaskTitle(item.type, item.id, item.title)
 
@@ -365,6 +372,7 @@ function toRewardTask(value: unknown): RewardTask | null {
     mood: resolveTaskMood(item.type, item.id, item.title, item.mood),
     coverImage: sanitizeCoverImage(item.type, item.id, item.coverImage),
     mediaUrl,
+    actionUrl,
     reach: item.reach,
     engagement: item.engagement,
   }
@@ -374,6 +382,7 @@ function mergeWithFallbackCatalog(remoteTasks: RewardTask[]) {
   const merged = [...remoteTasks]
   const hasRemoteMusic = remoteTasks.some((task) => task.type === 'Music')
   const hasRemoteArt = remoteTasks.some((task) => task.type === 'Art')
+  const hasRemoteSocial = remoteTasks.some((task) => task.type === 'Social')
   const hasRemoteAds = remoteTasks.some((task) => task.type === 'Ads')
 
   if (!hasRemoteMusic) {
@@ -386,6 +395,10 @@ function mergeWithFallbackCatalog(remoteTasks: RewardTask[]) {
 
   if (!hasRemoteAds) {
     merged.push(...fallbackTasks.filter((task) => task.type === 'Ads'))
+  }
+
+  if (!hasRemoteSocial) {
+    merged.push(...fallbackTasks.filter((task) => task.type === 'Social'))
   }
 
   return merged
@@ -598,6 +611,22 @@ function formatUnlockLabel(unlockAt: Date) {
   })
 }
 
+function getAllowedTaskTypesForTier(tierId: SignupTierId): RewardTask['type'][] {
+  if (tierId === 'tier4') {
+    return ['Music', 'Art', 'Social', 'Ads']
+  }
+
+  if (tierId === 'tier3') {
+    return ['Ads']
+  }
+
+  if (tierId === 'tier2') {
+    return ['Social']
+  }
+
+  return ['Music', 'Art']
+}
+
 function buildPersonalizedQueue(
   catalogTasks: RewardTask[],
   now = new Date(),
@@ -606,20 +635,24 @@ function buildPersonalizedQueue(
   const scope = getQueueScope(now)
   const baseDailyLimit = getDailyLimitForTier(scope.tierId)
   const bonusDailyLimit = getExtraTaskSlotsFromCredits(scope.user)
-  const adsEnabled = canAccessAdTasks(scope.user)
   const aiBotAutoModeActive = isAIBotAutomationActiveForUser(scope.user, now)
+  const allowedTaskTypes = getAllowedTaskTypesForTier(scope.tierId)
+  const allowedTaskTypeSet = new Set<RewardTask['type']>(allowedTaskTypes)
 
   const pool = catalogTasks.filter((task) =>
-    adsEnabled ? true : task.type !== 'Ads',
+    allowedTaskTypeSet.has(task.type),
   )
-  const effectivePool = pool.length > 0 ? pool : fallbackTasks
+  const fallbackPool = fallbackTasks.filter((task) => allowedTaskTypeSet.has(task.type))
+  const effectivePool = pool.length > 0 ? pool : fallbackPool.length > 0 ? fallbackPool : fallbackTasks
   const musicPool = effectivePool.filter((task) => task.type === 'Music')
   const artPool = effectivePool.filter((task) => task.type === 'Art')
-  const adPool = adsEnabled
-    ? effectivePool.filter((task) => task.type === 'Ads')
-    : []
-  const minimumMusicPerDay = musicPool.length > 0 ? 1 : 0
-  const minimumArtPerDay = artPool.length > 0 ? 1 : 0
+  const socialPool = effectivePool.filter((task) => task.type === 'Social')
+  const adPool = effectivePool.filter((task) => task.type === 'Ads')
+  const minimumMusicPerDay = allowedTaskTypeSet.has('Music') && musicPool.length > 0 ? 1 : 0
+  const minimumArtPerDay = allowedTaskTypeSet.has('Art') && artPool.length > 0 ? 1 : 0
+  const minimumSocialPerDay =
+    allowedTaskTypeSet.has('Social') && socialPool.length > 0 ? 1 : 0
+  const minimumAdsPerDay = allowedTaskTypeSet.has('Ads') && adPool.length > 0 ? 1 : 0
   const dailyLimit = baseDailyLimit + bonusDailyLimit
   const openSlotLimit = getOpenSlotLimitForTier(scope.tierId)
 
@@ -660,46 +693,45 @@ function buildPersonalizedQueue(
       ],
   )
 
-  function getAdTargetCount() {
-    if (!adsEnabled || adPool.length === 0 || selectedBaseTasks.length === 0) {
+  function getMixedTypeTargetCount(taskType: RewardTask['type'], availableCount: number) {
+    if (scope.tierId !== 'tier4' || availableCount === 0 || selectedBaseTasks.length === 0) {
       return 0
     }
 
-    const ratio = scope.tierId === 'tier3' ? 0.35 : 0.25
+    const ratio = taskType === 'Ads' || taskType === 'Social' ? 0.25 : 0.18
     const desired = Math.round(selectedBaseTasks.length * ratio)
-    const minAds = scope.tierId === 'tier3' ? 3 : 2
-    const maxAds = scope.tierId === 'tier3' ? 6 : 4
-    const nonAdReserved = minimumMusicPerDay + minimumArtPerDay
-    const maxAllowedBySlots = Math.max(selectedBaseTasks.length - nonAdReserved, 0)
+    const minimum = taskType === 'Ads' || taskType === 'Social' ? 2 : 1
+    const maximum = taskType === 'Ads' || taskType === 'Social' ? 6 : 4
+    const maxAllowedBySlots = Math.max(selectedBaseTasks.length, 0)
 
-    return clamp(desired, minAds, Math.min(maxAds, adPool.length, maxAllowedBySlots))
+    return clamp(desired, minimum, Math.min(maximum, availableCount, maxAllowedBySlots))
   }
 
-  function enforceAdMaximum(maxAds: number) {
-    if (maxAds < 0 || selectedBaseTasks.length === 0) {
+  function enforceTypeMaximum(taskType: RewardTask['type'], maxCount: number) {
+    if (maxCount < 0 || selectedBaseTasks.length === 0) {
       return
     }
 
-    const adIndexes = selectedBaseTasks
+    const typeIndexes = selectedBaseTasks
       .map((task, index) => ({ task, index }))
-      .filter((entry) => entry.task.type === 'Ads')
+      .filter((entry) => entry.task.type === taskType)
       .map((entry) => entry.index)
 
-    if (adIndexes.length <= maxAds) {
+    if (typeIndexes.length <= maxCount) {
       return
     }
 
-    const nonAdPool = effectivePool.filter((task) => task.type !== 'Ads')
-    if (nonAdPool.length === 0) {
+    const replacementPool = effectivePool.filter((task) => task.type !== taskType)
+    if (replacementPool.length === 0) {
       return
     }
 
     let replacementCursor = 0
 
-    for (let index = maxAds; index < adIndexes.length; index += 1) {
-      const slotIndex = adIndexes[index]
+    for (let index = maxCount; index < typeIndexes.length; index += 1) {
+      const slotIndex = typeIndexes[index]
       selectedBaseTasks[slotIndex] =
-        nonAdPool[(rotationOffset + replacementCursor) % nonAdPool.length]
+        replacementPool[(rotationOffset + replacementCursor) % replacementPool.length]
       replacementCursor += 1
     }
   }
@@ -735,14 +767,26 @@ function buildPersonalizedQueue(
     }
   }
 
-  const adTargetCount = getAdTargetCount()
-  enforceAdMaximum(adTargetCount)
+  const adTargetCount =
+    scope.tierId === 'tier3'
+      ? selectedBaseTasks.length
+      : getMixedTypeTargetCount('Ads', adPool.length)
+  const socialTargetCount =
+    scope.tierId === 'tier2'
+      ? selectedBaseTasks.length
+      : getMixedTypeTargetCount('Social', socialPool.length)
+
+  enforceTypeMaximum('Ads', adTargetCount)
+  enforceTypeMaximum('Social', socialTargetCount)
   enforceTypeQuota('Music', minimumMusicPerDay, 3)
   enforceTypeQuota('Art', minimumArtPerDay, 11)
+  enforceTypeQuota('Social', Math.max(minimumSocialPerDay, socialTargetCount), 17)
 
   if (adTargetCount > 0) {
     enforceTypeQuota('Ads', adTargetCount, 19)
   }
+
+  enforceTypeQuota('Ads', minimumAdsPerDay, 23)
 
   const queue = Array.from({ length: dailyLimit }).map((_, slotIndex) => {
     const baseTask = selectedBaseTasks[slotIndex]

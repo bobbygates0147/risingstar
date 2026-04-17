@@ -1,4 +1,4 @@
-type CatalogTaskType = 'Music' | 'Ads' | 'Art'
+type CatalogTaskType = 'Music' | 'Ads' | 'Art' | 'Social'
 
 type CatalogProfile = {
   title: string
@@ -454,6 +454,7 @@ function getZeroBasedCatalogIndex(
     ],
     Art: [/art[-_ #]*(\d+)/i, /art\s+session[-_ #]*(\d+)/i],
     Ads: [/ad[-_ #]*(\d+)/i, /sponsored\s+slot[-_ #]*(\d+)/i],
+    Social: [/social[-_ #]*(\d+)/i, /follow[-_ #]*(\d+)/i],
   }
 
   for (const pattern of patterns[type]) {
@@ -481,6 +482,12 @@ function isGenericTitle(type: CatalogTaskType, title: string) {
 
   if (type === 'Art') {
     return /^(art|artwork|art session)(?:\s*[-_#]?\s*\d+)?$/.test(normalized)
+  }
+
+  if (type === 'Social') {
+    return /^(social|follow|join|social session)(?:\s*[-_#]?\s*\d+)?$/.test(
+      normalized,
+    )
   }
 
   return /^(ad|ads|advert|advertisement|sponsored slot|sponsor slot|video)(?:\s*[-_#]?\s*\d+)?$/.test(
@@ -555,6 +562,14 @@ export function getTaskCatalogProfile(
 
   if (type === 'Ads') {
     return getAdCatalogProfile(index)
+  }
+
+  if (type === 'Social') {
+    return {
+      title: `Social Follow ${index + 1}`,
+      artist: 'Rising Star Social',
+      mood: 'Follow or join partner channel',
+    }
   }
 
   return getArtCatalogProfile(index)

@@ -7,9 +7,11 @@ import {
   Clapperboard,
   Coins,
   Disc3,
+  ExternalLink,
   Heart,
   Palette,
   Play,
+  Send,
   Sparkles,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -18,7 +20,6 @@ import { AD_VIDEO_ASSETS } from '../data/ad-video-catalog'
 import { MUSIC_AUDIO_ASSETS } from '../data/music-audio-catalog'
 import { type TaskType } from '../data/platform-data'
 import { useRewardTasks } from '../hooks/use-reward-tasks'
-import { getAuthenticatedUser } from '../lib/auth'
 import { formatUsd } from '../lib/format'
 import { showToast } from '../lib/toast'
 
@@ -27,7 +28,7 @@ type TaskPlayerConfig = {
   subtitle: string
   actionHint: string
   actionLabel: string
-  mode: 'music' | 'video' | 'like'
+  mode: 'music' | 'video' | 'like' | 'social'
   icon: LucideIcon
   badgeClassName: string
   ctaClassName: string
@@ -82,12 +83,28 @@ const taskPlayerConfig: Record<TaskType, TaskPlayerConfig> = {
       'Do not navigate away before verification',
     ],
   },
+  Social: {
+    heading: 'Social Follow Task',
+    subtitle: 'Open the channel, follow or join, then keep this session active.',
+    actionHint: 'Social action required',
+    actionLabel: 'Open channel and verify',
+    mode: 'social',
+    icon: Send,
+    badgeClassName:
+      'border-[rgba(56,189,248,0.36)] bg-[rgba(14,165,233,0.14)] text-sky-200',
+    ctaClassName:
+      'bg-gradient-to-r from-sky-500 to-emerald-500 text-slate-950 shadow-[0_20px_45px_rgba(14,165,233,0.32)]',
+    rules: [
+      'Open the social link',
+      'Follow the account or join the channel',
+      'Return here and keep the timer active',
+    ],
+  },
 }
 
 const MEDIA_END_COMPLETION_THRESHOLD_SECONDS = 2
 const SEEK_TOLERANCE_SECONDS = 0.2
 const SEEK_WARNING_COOLDOWN_MS = 4000
-const WALLET_UPDATED_EVENT = 'rising-star:wallet-updated'
 
 function parseDurationToSeconds(duration: string) {
   const [minutesRaw, secondsRaw] = duration.split(':')
@@ -156,7 +173,6 @@ export function TaskPlayerPage() {
   const musicRef = useRef<HTMLAudioElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const completionNotifiedRef = useRef(false)
-  const noCreditNotifiedRef = useRef(false)
   const shouldAutoReturnRef = useRef(false)
   const resumeAfterUnmuteRef = useRef(false)
   const openedSessionRef = useRef<string | null>(null)
@@ -173,6 +189,7 @@ export function TaskPlayerPage() {
   const [hasStarted, setHasStarted] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [likedArtwork, setLikedArtwork] = useState(false)
+  const [visitedSocialLink, setVisitedSocialLink] = useState(false)
   const [muteBlocked, setMuteBlocked] = useState(false)
   const [visibilityBlocked, setVisibilityBlocked] = useState(false)
   const [musicMediaIndex, setMusicMediaIndex] = useState(0)
@@ -182,9 +199,6 @@ export function TaskPlayerPage() {
   const isTimeLocked = Boolean(task?.isTimeLocked)
   const isCompleted = task?.status === 'completed'
   const elapsedSeconds = Math.max(totalSeconds - remainingSeconds, 0)
-  const [taskCredits, setTaskCredits] = useState(
-    Number(getAuthenticatedUser()?.taskCredits || 0),
-  )
   const completionPercent = isCompleted
     ? 100
     : totalSeconds > 0
@@ -201,13 +215,21 @@ export function TaskPlayerPage() {
   const isMusicSession = config?.mode === 'music'
   const isVideoSession = config?.mode === 'video'
   const isLikeSession = config?.mode === 'like'
+  const isSocialSession = config?.mode === 'social'
   const isArtLikeVerifying =
     isLikeSession &&
     likedArtwork &&
     hasStarted &&
     !isCompleted &&
     remainingSeconds > 0
+  const isSocialVerifying =
+    isSocialSession &&
+    visitedSocialLink &&
+    hasStarted &&
+    !isCompleted &&
+    remainingSeconds > 0
   const mediaUrl = task?.mediaUrl
+  const socialActionUrl = task?.actionUrl || ''
   const normalizedMediaUrl = typeof mediaUrl === 'string' ? normalizeMediaSource(mediaUrl) : ''
 
   const musicMediaCandidates = useMemo(() => {
@@ -257,6 +279,10 @@ export function TaskPlayerPage() {
         ? hasMusicMedia
           ? 'Press play and keep audio running until timer reaches zero.'
           : 'No audio media found for this session yet.'
+      : task.type === 'Social'
+        ? socialActionUrl
+          ? 'Open the social link, complete the follow or join action, then return for timer validation.'
+          : 'Social link is being prepared for this session.'
       : config.subtitle
   const actionHint =
     isTimeLocked
@@ -275,6 +301,10 @@ export function TaskPlayerPage() {
         : 'Preview sponsor creative'
       : task?.type === 'Music'
         ? 'Play music and stay active'
+      : task?.type === 'Social'
+        ? visitedSocialLink
+          ? 'Social action opened'
+          : 'Open social link'
       : config?.actionLabel || 'Start session'
   const taskRules =
     task?.type === 'Ads' && canPlayAdVideo
@@ -289,6 +319,12 @@ export function TaskPlayerPage() {
             'Do not mute the tab during validation',
             'Stay on this screen for full payout eligibility',
           ]
+        : task?.type === 'Social'
+          ? [
+              'Open the account or channel link',
+              'Follow, join, or subscribe where required',
+              'Return here and keep this screen active until verified',
+            ]
         : config?.rules || []
 
   function isMediaMuted(mediaElement: HTMLMediaElement) {
@@ -430,19 +466,15 @@ export function TaskPlayerPage() {
       return
     }
 
-    if (taskCredits <= 0) {
-      showToast({
-        variant: 'warning',
-        title: 'No task credits',
-        description: 'Purchase a task pack to start this session.',
-      })
-      return
-    }
-
     setHasStarted(true)
 
     if (isLikeSession) {
       setIsRunning(likedArtwork)
+      return
+    }
+
+    if (isSocialSession) {
+      setIsRunning(visitedSocialLink)
       return
     }
 
@@ -482,6 +514,7 @@ export function TaskPlayerPage() {
       setHasStarted(taskStatus === 'completed')
       setIsRunning(false)
       setLikedArtwork(taskStatus === 'completed')
+      setVisitedSocialLink(taskStatus === 'completed')
       setMuteBlocked(false)
       setVisibilityBlocked(false)
     }, 0)
@@ -552,28 +585,6 @@ export function TaskPlayerPage() {
   }, [taskSessionId, hasStarted, isRunning, isCompleted, isTimeLocked])
 
   useEffect(() => {
-    function syncCredits() {
-      const nextCredits = Number(getAuthenticatedUser()?.taskCredits || 0)
-      setTaskCredits(nextCredits)
-    }
-
-    syncCredits()
-    window.addEventListener('storage', syncCredits)
-    window.addEventListener(WALLET_UPDATED_EVENT, syncCredits)
-
-    return () => {
-      window.removeEventListener('storage', syncCredits)
-      window.removeEventListener(WALLET_UPDATED_EVENT, syncCredits)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (remainingSeconds > 0 || taskCredits > 0) {
-      noCreditNotifiedRef.current = false
-    }
-  }, [remainingSeconds, taskCredits])
-
-  useEffect(() => {
     if (
       !taskSessionId ||
       !hasStarted ||
@@ -589,15 +600,7 @@ export function TaskPlayerPage() {
       return
     }
 
-    if (taskCredits <= 0) {
-      if (!noCreditNotifiedRef.current) {
-        noCreditNotifiedRef.current = true
-        showToast({
-          variant: 'warning',
-          title: 'No task credits',
-          description: 'Purchase a task pack to complete this session.',
-        })
-      }
+    if (isSocialSession && !visitedSocialLink) {
       return
     }
 
@@ -614,12 +617,14 @@ export function TaskPlayerPage() {
     hasStarted,
     isCompleted,
     isLikeSession,
+    isSocialSession,
     isTimeLocked,
     likedArtwork,
     remainingSeconds,
     taskReward,
     taskSessionId,
     taskTitle,
+    visitedSocialLink,
   ])
 
   useEffect(() => {
@@ -1020,6 +1025,43 @@ export function TaskPlayerPage() {
                 <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2 text-xs text-[var(--text-secondary)]">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--glow)] border-t-transparent" />
                   Verifying like action
+                  <span className="font-semibold text-[var(--text-primary)]">
+                    {formatDuration(remainingSeconds)}
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : isSocialSession ? (
+            <div className="mt-6 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-panel)] p-3">
+              <button
+                type="button"
+                disabled={isTimeLocked || isCompleted || !socialActionUrl}
+                onClick={() => {
+                  if (isTimeLocked || isCompleted || !socialActionUrl) {
+                    return
+                  }
+
+                  window.open(socialActionUrl, '_blank', 'noopener,noreferrer')
+                  setVisitedSocialLink(true)
+                  setHasStarted(true)
+                  setIsRunning(true)
+                }}
+                className={clsx(
+                  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70',
+                  config.ctaClassName,
+                )}
+                aria-label={config.actionLabel}
+              >
+                <ExternalLink className="h-4 w-4" />
+                {visitedSocialLink ? 'Social Link Opened' : 'Open Social Link'}
+              </button>
+              <p className="mt-3 break-all text-xs text-[var(--text-secondary)]">
+                {socialActionUrl || 'Social link unavailable'}
+              </p>
+              {isSocialVerifying && (
+                <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--glow)] border-t-transparent" />
+                  Verifying social action
                   <span className="font-semibold text-[var(--text-primary)]">
                     {formatDuration(remainingSeconds)}
                   </span>

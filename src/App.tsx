@@ -10,7 +10,9 @@ import { AdminPanelPage } from './pages/admin-panel-page'
 import { AIBotPage } from './pages/ai-bot-page'
 import { LoginPage, SignupPage, SignupPaymentPage } from './pages/auth-page'
 import { DashboardPage } from './pages/dashboard-page'
+import { LeaderboardPage } from './pages/leaderboard-page'
 import { ProfilePage } from './pages/profile-page'
+import { ReferralsPage } from './pages/referrals-page'
 import { TaskPlayerPage } from './pages/task-player-page'
 import { TasksPage } from './pages/tasks-page'
 import { WalletPage } from './pages/wallet-page'
@@ -65,6 +67,8 @@ function App() {
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/tasks/:taskId" element={<TaskPlayerPage />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/referrals" element={<ReferralsPage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/ai-bot" element={<AIBotPage />} />

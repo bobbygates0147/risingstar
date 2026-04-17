@@ -6,6 +6,7 @@ import {
   Palette,
   Play,
   Radio,
+  Send,
   Sparkles,
   Copy,
 } from 'lucide-react'
@@ -14,9 +15,9 @@ import { Link } from 'react-router-dom'
 import { PaginationControls } from '../components/pagination-controls'
 import { TaskCoverImage } from '../components/task-cover-image'
 import { type TaskType } from '../data/platform-data'
+import { useCurrencyConverter } from '../hooks/use-currency-converter'
 import { useRewardTasks } from '../hooks/use-reward-tasks'
 import {
-  canAccessAdTasks,
   getAuthenticatedUser,
   getAuthorizedHeaders,
   refreshAuthenticatedUser,
@@ -79,6 +80,7 @@ export function TasksPage() {
   const [aiPulseNowMs, setAiPulseNowMs] = useState(() => Date.now())
   const { tasks: rewardTasks, isLoading } = useRewardTasks()
   const currentUser = getAuthenticatedUser()
+  const currencyConverter = useCurrencyConverter(currentUser?.countryCode)
   const [taskCredits, setTaskCredits] = useState(
     Number(currentUser?.taskCredits || 0),
   )
@@ -103,9 +105,9 @@ export function TasksPage() {
   const [purchaseBusy, setPurchaseBusy] = useState(false)
   const [purchaseError, setPurchaseError] = useState('')
   const [purchaseMessage, setPurchaseMessage] = useState('')
-  const adsUnlocked = canAccessAdTasks(currentUser)
   const selectedPack = taskPacks.find((item) => item.id === selectedPackId) ?? taskPacks[0]
   const packAmountUsd = selectedPack ? selectedPack.priceUsd : 0
+  const packAmountLocal = currencyConverter.formatDualFromUsd(packAmountUsd)
   const selectedWalletAddress =
     (packCryptoNetwork === 'USDT-TRC20'
       ? cryptoInstructions.usdtTrc20Address
@@ -150,9 +152,11 @@ export function TasksPage() {
       ? 'Resume AI Bot'
       : 'Open AI Bot'
 
-  const taskFilters: TaskFilter[] = adsUnlocked
-    ? ['All', 'Music', 'Ads', 'Art', 'Completed']
-    : ['All', 'Music', 'Art', 'Completed']
+  const taskTypeOrder: TaskType[] = ['Music', 'Art', 'Social', 'Ads']
+  const visibleTaskTypes = taskTypeOrder.filter((type) =>
+    rewardTasks.some((task) => task.type === type),
+  )
+  const taskFilters: TaskFilter[] = ['All', ...visibleTaskTypes, 'Completed']
   const selectedFilter = taskFilters.includes(activeFilter) ? activeFilter : 'All'
 
   const filteredTasks = useMemo(() => {
@@ -480,6 +484,7 @@ export function TasksPage() {
   ).length
 
   const projectedReward = getProjectedReward(rewardTasks)
+  const projectedRewardLocal = currencyConverter.formatDualFromUsd(projectedReward)
   const nextQueuedTask = useMemo(() => getNextQueuedTask(rewardTasks), [rewardTasks])
   const projectedRewardDetail = nextQueuedTask
     ? `Next queue unlock ${nextQueuedTask.unlockAt.toLocaleTimeString([], {
@@ -503,18 +508,12 @@ export function TasksPage() {
                 Task grid
               </p>
               <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-                Music listens, art likes, and sponsored clips in one queue
+                Tier-based tasks matched to your account level
               </h2>
               <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
-                Daily tasks are capped by tier and released in scattered time
-                slots through the day. Each account gets a shuffled sequence,
-                while task assets can rotate in loops.
+                Tier 1 gets music and art. Tier 2 gets social follow and join
+                tasks. Tier 3 gets ads. Tier 4 mixes everything in one queue.
               </p>
-              {!adsUnlocked && (
-                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-amber-200">
-                  Tier 2 unlocks sponsored ad tasks.
-                </p>
-              )}
             </div>
 
           <div className="rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-overlay)] px-4 py-3 text-sm text-[var(--text-secondary)]">
@@ -541,6 +540,9 @@ export function TasksPage() {
         <p className="mt-3 font-display text-4xl font-semibold text-[var(--text-primary)]">
           {formatUsd(projectedReward)}
         </p>
+          <p className="mt-1 text-sm text-emerald-200">
+            Approx {projectedRewardLocal.local} local
+          </p>
           {isLoading && (
             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
               Syncing task data
@@ -566,7 +568,7 @@ export function TasksPage() {
                 {taskCredits}
               </p>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Each completed task consumes 1 credit. Credits also raise your daily cap.
+                Your tier tasks are included. Credits only add extra tasks after your daily tier queue is used.
               </p>
             </div>
             <button
@@ -761,6 +763,7 @@ export function TasksPage() {
             const isLockedByTime = Boolean(task.isTimeLocked)
             const isLocked = isCompleted || isLockedByTime
             const isArtTask = task.type === 'Art'
+            const isSocialTask = task.type === 'Social'
             const actionLabel = isCompleted
               ? 'Completed'
               : isLockedByTime
@@ -829,13 +832,18 @@ export function TasksPage() {
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-3 py-3">
                     <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                      {isArtTask ? 'Action' : 'Duration'}
+                      {isArtTask || isSocialTask ? 'Action' : 'Duration'}
                     </p>
                     <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
                       {isArtTask ? (
                         <>
                           <Heart className="h-4 w-4 text-[var(--warning)]" />
                           Like
+                        </>
+                      ) : isSocialTask ? (
+                        <>
+                          <Send className="h-4 w-4 text-sky-300" />
+                          Follow
                         </>
                       ) : (
                         <>
@@ -851,6 +859,9 @@ export function TasksPage() {
                     </p>
                     <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
                       {formatUsd(task.reward)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                      Approx {currencyConverter.formatDualFromUsd(task.reward).local}
                     </p>
                   </div>
                 </div>
@@ -940,6 +951,9 @@ export function TasksPage() {
                   value={formatUsd(packAmountUsd)}
                   className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm text-[var(--text-primary)] outline-none transition"
                 />
+                <span className="mt-2 block text-xs text-[var(--text-tertiary)]">
+                  Local estimate: {packAmountLocal.local}
+                </span>
               </label>
             </div>
 

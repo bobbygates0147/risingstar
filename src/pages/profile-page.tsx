@@ -33,10 +33,12 @@ import {
 } from '../hooks/use-profile-data'
 import {
   fetchSignupConfig,
+  getAuthenticatedUser,
   signOut,
   type SignupConfig,
   type SignupTierId,
 } from '../lib/auth'
+import { useCurrencyConverter } from '../hooks/use-currency-converter'
 import { formatUsd } from '../lib/format'
 import {
   DEFAULT_LANGUAGE_CODE,
@@ -173,6 +175,10 @@ function resolveTierId(value: string): SignupTierId {
     return 'tier3'
   }
 
+  if (normalized === 'tier4' || normalized === '4') {
+    return 'tier4'
+  }
+
   return 'tier1'
 }
 
@@ -185,7 +191,11 @@ function getTierRank(tierId: SignupTierId) {
     return 2
   }
 
-  return 3
+  if (tierId === 'tier3') {
+    return 3
+  }
+
+  return 4
 }
 
 function getTierLabel(tierId: SignupTierId) {
@@ -197,7 +207,11 @@ function getTierLabel(tierId: SignupTierId) {
     return 'Tier 2'
   }
 
-  return 'Tier 3'
+  if (tierId === 'tier3') {
+    return 'Tier 3'
+  }
+
+  return 'Tier 4'
 }
 
 export function ProfilePage() {
@@ -205,6 +219,7 @@ export function ProfilePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { summary } = useDashboardData()
+  const currencyConverter = useCurrencyConverter(getAuthenticatedUser()?.countryCode)
   const {
     profile,
     stats,
@@ -388,7 +403,7 @@ export function ProfilePage() {
 
   const currentTierId = useMemo(() => resolveTierId(profile.tier), [profile.tier])
   const currentTierRank = getTierRank(currentTierId)
-  const nextTierId = currentTierRank < 3 ? (`tier${currentTierRank + 1}` as SignupTierId) : null
+  const nextTierId = currentTierRank < 4 ? (`tier${currentTierRank + 1}` as SignupTierId) : null
   const nextTierLabel = nextTierId ? getTierLabel(nextTierId) : 'Max tier'
 
   const availableUpgradeTiers = useMemo(() => {
@@ -411,6 +426,9 @@ export function ProfilePage() {
       availableUpgradeTiers[0]
     )
   }, [availableUpgradeTiers, selectedUpgradeTier])
+  const selectedUpgradeTierLocal = selectedUpgradeTierConfig
+    ? currencyConverter.formatDualFromUsd(selectedUpgradeTierConfig.feeUsd)
+    : null
 
   const networkOptions = useMemo(() => {
     const crypto = tierUpgradeConfig?.paymentInstructions.crypto
@@ -447,10 +465,11 @@ export function ProfilePage() {
       'Rising Star Tier Upgrade',
       `Tier: ${selectedUpgradeTierConfig.label}`,
       `Amount USD: ${selectedUpgradeTierConfig.feeUsd.toFixed(2)}`,
+      `Local estimate: ${selectedUpgradeTierLocal?.local || ''}`,
       `Network: ${selectedNetworkOption.label}`,
       `Address: ${selectedNetworkOption.address}`,
     ].join('\n')
-  }, [selectedNetworkOption, selectedUpgradeTierConfig])
+  }, [selectedNetworkOption, selectedUpgradeTierConfig, selectedUpgradeTierLocal])
 
   const qrImageUrl = useMemo(() => {
     if (!qrPayload) {
@@ -668,9 +687,9 @@ export function ProfilePage() {
             <button
               type="button"
               onClick={() => {
-                if (currentTierRank >= 3) {
+                if (currentTierRank >= 4) {
                   showToast({
-                    title: 'Tier 3 is the highest tier available.',
+                    title: 'Tier 4 is the highest tier available.',
                     variant: 'info',
                   })
                   return
@@ -680,7 +699,7 @@ export function ProfilePage() {
               }}
               className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[var(--purple)] to-[var(--blue)] px-4 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(124,58,237,0.28)] transition hover:brightness-110"
             >
-              {currentTierRank >= 3 ? 'Max Tier Reached' : 'Upgrade Tier'}
+              {currentTierRank >= 4 ? 'Max Tier Reached' : 'Upgrade Tier'}
             </button>
           </div>
         </article>
@@ -898,7 +917,7 @@ export function ProfilePage() {
                     >
                       {availableUpgradeTiers.map((tier) => (
                         <option key={tier.id} value={tier.id}>
-                          {tier.label} - {formatUsd(tier.feeUsd)}
+                          {tier.label} - {formatUsd(tier.feeUsd)} - Approx {currencyConverter.formatDualFromUsd(tier.feeUsd).local}
                         </option>
                       ))}
                     </select>
@@ -932,6 +951,11 @@ export function ProfilePage() {
                         <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
                           Send {formatUsd(selectedUpgradeTierConfig.feeUsd)} To
                         </p>
+                        {selectedUpgradeTierLocal ? (
+                          <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                            Local estimate: {selectedUpgradeTierLocal.local}
+                          </p>
+                        ) : null}
                         <p className="mt-2 break-all text-sm font-medium leading-7 text-[var(--text-primary)]">
                           {selectedNetworkOption.address}
                         </p>

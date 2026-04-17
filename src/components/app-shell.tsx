@@ -42,6 +42,14 @@ const pageMeta: Record<string, { title: string; description: string }> = {
     title: 'Wallet',
     description: 'Manage withdrawals and your payout history.',
   },
+  '/referrals': {
+    title: 'Referrals',
+    description: 'Invite friends and unlock gadget milestones.',
+  },
+  '/leaderboard': {
+    title: 'Leadership',
+    description: 'Track highest user withdrawals and live cashout rankings.',
+  },
   '/activity': {
     title: 'Activity',
     description: 'Review recent earnings, completed tasks, and withdrawal events.',

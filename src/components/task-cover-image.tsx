@@ -12,6 +12,7 @@ const typeFallback: Record<TaskType, string> = {
   Music: '/images/mc1.jpg',
   Art: '/arts/7788954.jpg',
   Ads: '/images/mc20.jpg',
+  Social: '/images/mc6.jpg',
 }
 
 const ultimateFallback = '/images/mc1.jpg'

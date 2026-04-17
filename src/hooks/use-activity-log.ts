@@ -13,6 +13,7 @@ export type ActivityLogKind =
   | 'music'
   | 'ads'
   | 'art'
+  | 'social'
   | 'milestone'
   | 'bonus'
   | 'withdrawal'
@@ -47,6 +48,7 @@ function isActivityLogKind(value: unknown): value is ActivityLogKind {
     value === 'music' ||
     value === 'ads' ||
     value === 'art' ||
+    value === 'social' ||
     value === 'milestone' ||
     value === 'bonus' ||
     value === 'withdrawal'

@@ -71,7 +71,7 @@ type AvatarUploadPayload = {
 }
 
 type TierUpgradePayload = {
-  tier: 'tier1' | 'tier2' | 'tier3'
+  tier: 'tier1' | 'tier2' | 'tier3' | 'tier4'
   paymentMethod: 'crypto'
   paymentReference: string
   paymentAmountUsd: number

@@ -13,14 +13,26 @@ import { useSearchParams } from 'react-router-dom'
 import { PaginationControls } from '../components/pagination-controls'
 import { type CryptoNetwork } from '../lib/crypto-wallets'
 import {
+  type AuthUser,
   getAuthenticatedUser,
   getAuthorizedHeaders,
+  resolveUserTierId,
 } from '../lib/auth'
 import { useCurrencyConverter } from '../hooks/use-currency-converter'
 import { showToast } from '../lib/toast'
 
 type WalletStatus = 'Completed' | 'Pending' | 'Failed'
 type WalletEntryKind = 'withdrawal' | 'music' | 'ads' | 'art' | 'social'
+type KycVerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
+
+type WithdrawalEligibility = {
+  canWithdraw: boolean
+  kycStatus: KycVerificationStatus
+  requiresKyc: boolean
+  requiresActiveAiBot: boolean
+  aiBotActive: boolean
+  message: string
+}
 
 type WalletEntry = {
   id: string
@@ -40,6 +52,7 @@ type WalletSummaryResponse = {
     balance?: number
     withdrawable?: number
   }
+  withdrawalEligibility?: unknown
 }
 
 type WalletWithdrawResponse = {
@@ -116,6 +129,116 @@ function statusTone(status: WalletStatus) {
     return 'bg-amber-500/20 text-amber-300'
   }
   return 'bg-rose-500/20 text-rose-300'
+}
+
+function isKycVerificationStatus(value: unknown): value is KycVerificationStatus {
+  return (
+    value === 'unverified' ||
+    value === 'pending' ||
+    value === 'verified' ||
+    value === 'rejected'
+  )
+}
+
+function formatKycStatus(value: KycVerificationStatus) {
+  if (value === 'verified') {
+    return 'Verified'
+  }
+
+  if (value === 'rejected') {
+    return 'Rejected'
+  }
+
+  if (value === 'pending') {
+    return 'Pending'
+  }
+
+  return 'Not Verified'
+}
+
+function resolveLocalKycStatus(user: AuthUser | null): KycVerificationStatus {
+  if (user?.role === 'admin') {
+    return 'verified'
+  }
+
+  return isKycVerificationStatus(user?.kycVerificationStatus)
+    ? user.kycVerificationStatus
+    : 'unverified'
+}
+
+function isLocalAIBotActive(user: AuthUser | null) {
+  if (!user?.aiBotEnabled) {
+    return false
+  }
+
+  if (user.aiBotVerificationStatus && user.aiBotVerificationStatus !== 'verified') {
+    return false
+  }
+
+  if (!user.aiBotExpiresAt) {
+    return true
+  }
+
+  const expiresAt = new Date(user.aiBotExpiresAt).getTime()
+  return Number.isFinite(expiresAt) && expiresAt > Date.now()
+}
+
+function buildWithdrawalEligibility(user: AuthUser | null): WithdrawalEligibility {
+  const kycStatus = resolveLocalKycStatus(user)
+  const kycVerified = kycStatus === 'verified'
+  const requiresActiveAiBot = user?.role !== 'admin' && resolveUserTierId(user) === 'tier4'
+  const aiBotActive = isLocalAIBotActive(user)
+  const canWithdraw = kycVerified && (!requiresActiveAiBot || aiBotActive)
+  let message = ''
+
+  if (!kycVerified) {
+    message = 'KYC verification is required before withdrawals.'
+  } else if (requiresActiveAiBot && !aiBotActive) {
+    message = 'Tier 4 withdrawals require an active verified AI Bot subscription.'
+  }
+
+  return {
+    canWithdraw,
+    kycStatus,
+    requiresKyc: !kycVerified,
+    requiresActiveAiBot,
+    aiBotActive,
+    message,
+  }
+}
+
+function toWithdrawalEligibility(
+  value: unknown,
+  fallback: WithdrawalEligibility,
+): WithdrawalEligibility {
+  if (!value || typeof value !== 'object') {
+    return fallback
+  }
+
+  const source = value as Record<string, unknown>
+
+  return {
+    canWithdraw:
+      typeof source.canWithdraw === 'boolean'
+        ? source.canWithdraw
+        : fallback.canWithdraw,
+    kycStatus: isKycVerificationStatus(source.kycStatus)
+      ? source.kycStatus
+      : fallback.kycStatus,
+    requiresKyc:
+      typeof source.requiresKyc === 'boolean'
+        ? source.requiresKyc
+        : fallback.requiresKyc,
+    requiresActiveAiBot:
+      typeof source.requiresActiveAiBot === 'boolean'
+        ? source.requiresActiveAiBot
+        : fallback.requiresActiveAiBot,
+    aiBotActive:
+      typeof source.aiBotActive === 'boolean'
+        ? source.aiBotActive
+        : fallback.aiBotActive,
+    message: typeof source.message === 'string' ? source.message : fallback.message,
+  }
 }
 
 function resolveEntryNetwork(entry: WalletEntry) {
@@ -224,6 +347,9 @@ export function WalletPage() {
   const [withdrawableBalance, setWithdrawableBalance] = useState(
     Number(authenticatedUser?.withdrawableBalance || 0),
   )
+  const [withdrawalEligibility, setWithdrawalEligibility] = useState(() =>
+    buildWithdrawalEligibility(authenticatedUser),
+  )
   const [lastSummaryUpdatedAt, setLastSummaryUpdatedAt] = useState<Date | null>(
     null,
   )
@@ -257,14 +383,22 @@ export function WalletPage() {
       const nextWithdrawable = Number(data.wallet?.withdrawable || 0)
       setTotalBalance(nextBalance)
       setWithdrawableBalance(nextWithdrawable)
+      setWithdrawalEligibility(
+        toWithdrawalEligibility(
+          data.withdrawalEligibility,
+          buildWithdrawalEligibility(getAuthenticatedUser()),
+        ),
+      )
       setLastSummaryUpdatedAt(new Date())
     } catch {
-      const fallbackBalance = Number(getAuthenticatedUser()?.walletBalance || 0)
+      const fallbackUser = getAuthenticatedUser()
+      const fallbackBalance = Number(fallbackUser?.walletBalance || 0)
       const fallbackWithdrawable = Number(
-        getAuthenticatedUser()?.withdrawableBalance || 0,
+        fallbackUser?.withdrawableBalance || 0,
       )
       setTotalBalance(fallbackBalance)
       setWithdrawableBalance(fallbackWithdrawable)
+      setWithdrawalEligibility(buildWithdrawalEligibility(fallbackUser))
       setLastSummaryUpdatedAt(new Date())
     }
   }, [])
@@ -327,6 +461,8 @@ export function WalletPage() {
     Number.isFinite(withdrawAmountValue) && withdrawAmountValue > 0
       ? currencyConverter.formatDualFromUsd(withdrawAmountValue)
       : null
+  const withdrawalBlockMessage =
+    withdrawalEligibility.message || 'Complete withdrawal requirements before sending USDT.'
 
   const lastUpdatedLabel = useMemo(() => {
     if (!lastSummaryUpdatedAt) {
@@ -360,7 +496,7 @@ export function WalletPage() {
 
   function openWithdrawModal() {
     setActiveModal('withdraw')
-    setWithdrawError('')
+    setWithdrawError(withdrawalEligibility.canWithdraw ? '' : withdrawalBlockMessage)
     setWithdrawAmount('')
     setWithdrawNetwork('')
     setWithdrawAddress('')
@@ -370,6 +506,11 @@ export function WalletPage() {
   async function handleWithdrawSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setWithdrawError('')
+
+    if (!withdrawalEligibility.canWithdraw) {
+      setWithdrawError(withdrawalBlockMessage)
+      return
+    }
 
     const amountValue = Number(withdrawAmount)
     const networkValue = withdrawNetwork
@@ -512,6 +653,11 @@ export function WalletPage() {
                   {totalBalanceLocal.local}
                 </span>
               </div>
+              {!withdrawalEligibility.canWithdraw && (
+                <p className="mt-4 max-w-xl rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                  {withdrawalBlockMessage}
+                </p>
+              )}
               
           </div>
 
@@ -519,7 +665,13 @@ export function WalletPage() {
             <button
               type="button"
               onClick={openWithdrawModal}
-              className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-panel)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-hover)] sm:w-auto"
+              disabled={!withdrawalEligibility.canWithdraw}
+              className={clsx(
+                'inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-panel)] px-4 text-sm font-semibold text-[var(--text-primary)] transition sm:w-auto',
+                withdrawalEligibility.canWithdraw
+                  ? 'hover:bg-[var(--surface-hover)]'
+                  : 'cursor-not-allowed opacity-60',
+              )}
             >
               <ArrowUpRight className="h-4 w-4" />
               Withdraw
@@ -759,10 +911,11 @@ export function WalletPage() {
                 </button>
               </div>
 
-              <form
-                className="mt-6 space-y-4"
-                onSubmit={handleWithdrawSubmit}
-              >
+              {withdrawalEligibility.canWithdraw ? (
+                <form
+                  className="mt-6 space-y-4"
+                  onSubmit={handleWithdrawSubmit}
+                >
                 <label className="block text-sm text-[var(--text-secondary)]">
                   Amount (USDT)
                   <input
@@ -855,7 +1008,67 @@ export function WalletPage() {
                     {withdrawSubmitting ? 'Submitting...' : 'Confirm withdrawal'}
                   </button>
                 </div>
-              </form>
+                </form>
+              ) : (
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
+                      Withdrawal locked
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-amber-50">
+                      {withdrawalBlockMessage}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                        KYC status
+                      </p>
+                      <p
+                        className={clsx(
+                          'mt-2 text-sm font-semibold',
+                          withdrawalEligibility.kycStatus === 'verified'
+                            ? 'text-emerald-200'
+                            : withdrawalEligibility.kycStatus === 'rejected'
+                              ? 'text-rose-200'
+                              : 'text-amber-100',
+                        )}
+                      >
+                        {formatKycStatus(withdrawalEligibility.kycStatus)}
+                      </p>
+                    </div>
+
+                    {withdrawalEligibility.requiresActiveAiBot && (
+                      <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 py-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                          AI Bot
+                        </p>
+                        <p
+                          className={clsx(
+                            'mt-2 text-sm font-semibold',
+                            withdrawalEligibility.aiBotActive
+                              ? 'text-emerald-200'
+                              : 'text-amber-100',
+                          )}
+                        >
+                          {withdrawalEligibility.aiBotActive ? 'Active' : 'Inactive'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setActiveModal(null)}
+                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] px-4 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

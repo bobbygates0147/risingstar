@@ -17,6 +17,9 @@ export type AdminUserRow = {
   registrationPaymentAmountUsd: number
   registrationPaymentSubmittedAt: string | null
   registrationPaidAt: string | null
+  kycVerificationStatus: 'unverified' | 'pending' | 'verified' | 'rejected'
+  kycReference: string
+  kycVerifiedAt: string | null
   aiBotStatus: 'Active' | 'Inactive'
   aiBotVerificationStatus: 'verified' | 'unverified' | 'rejected'
   aiBotPaymentTxHash: string
@@ -66,6 +69,7 @@ export type AdminStats = {
   pendingWithdrawals: number
   pendingTaskPacks?: number
   pendingRegistrations?: number
+  pendingKyc?: number
 }
 
 export type AdminOverviewPayload = {
@@ -89,6 +93,7 @@ const fallbackOverview: AdminOverviewPayload = {
     pendingWithdrawals: 0,
     pendingTaskPacks: 0,
     pendingRegistrations: 0,
+    pendingKyc: 0,
   },
 }
 
@@ -124,6 +129,12 @@ function isAdminUserRow(value: unknown): value is AdminUserRow {
     (typeof value.registrationPaymentSubmittedAt === 'string' ||
       value.registrationPaymentSubmittedAt === null) &&
     (typeof value.registrationPaidAt === 'string' || value.registrationPaidAt === null) &&
+    (value.kycVerificationStatus === 'unverified' ||
+      value.kycVerificationStatus === 'pending' ||
+      value.kycVerificationStatus === 'verified' ||
+      value.kycVerificationStatus === 'rejected') &&
+    typeof value.kycReference === 'string' &&
+    (typeof value.kycVerifiedAt === 'string' || value.kycVerifiedAt === null) &&
     (value.aiBotStatus === 'Active' || value.aiBotStatus === 'Inactive') &&
     (value.aiBotVerificationStatus === 'verified' ||
       value.aiBotVerificationStatus === 'unverified' ||
@@ -209,6 +220,7 @@ function toAdminStats(value: unknown): AdminStats {
   const pendingWithdrawals = Number(value.pendingWithdrawals ?? 0)
   const pendingTaskPacks = Number(value.pendingTaskPacks ?? 0)
   const pendingRegistrations = Number(value.pendingRegistrations ?? 0)
+  const pendingKyc = Number(value.pendingKyc ?? 0)
 
   return {
     totalUsers: Number.isFinite(totalUsers) ? totalUsers : 0,
@@ -218,6 +230,7 @@ function toAdminStats(value: unknown): AdminStats {
     pendingWithdrawals: Number.isFinite(pendingWithdrawals) ? pendingWithdrawals : 0,
     pendingTaskPacks: Number.isFinite(pendingTaskPacks) ? pendingTaskPacks : 0,
     pendingRegistrations: Number.isFinite(pendingRegistrations) ? pendingRegistrations : 0,
+    pendingKyc: Number.isFinite(pendingKyc) ? pendingKyc : 0,
   }
 }
 
@@ -495,6 +508,63 @@ export function useAdminOverview() {
     [load],
   )
 
+  const processKycVerification = useCallback(
+    async (userId: string, action: 'verify' | 'reject') => {
+      setError('')
+      setMessage('')
+      setIsBusy(true)
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/admin/kyc/${encodeURIComponent(userId)}/${action}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthorizedHeaders(),
+            },
+          },
+        )
+
+        const payload = (await response.json().catch(() => ({}))) as unknown
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            handleUnauthorized()
+          }
+
+          throw new Error(
+            extractMessage(
+              payload,
+              action === 'verify'
+                ? 'Unable to verify KYC'
+                : 'Unable to reject KYC',
+            ),
+          )
+        }
+
+        setMessage(
+          extractMessage(
+            payload,
+            action === 'verify' ? 'KYC verified' : 'KYC rejected',
+          ),
+        )
+        await load(true)
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : action === 'verify'
+              ? 'Unable to verify KYC'
+              : 'Unable to reject KYC',
+        )
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [load],
+  )
+
   const processRegistration = useCallback(
     async (userId: string, action: 'approve' | 'reject') => {
       setError('')
@@ -567,6 +637,8 @@ export function useAdminOverview() {
     rejectTaskPack: (purchaseId: string) => processTaskPack(purchaseId, 'reject'),
     verifyAIBot: (userId: string) => processAIBotVerification(userId, 'verify'),
     rejectAIBot: (userId: string) => processAIBotVerification(userId, 'reject'),
+    verifyKyc: (userId: string) => processKycVerification(userId, 'verify'),
+    rejectKyc: (userId: string) => processKycVerification(userId, 'reject'),
     approveRegistration: (userId: string) => processRegistration(userId, 'approve'),
     rejectRegistration: (userId: string) => processRegistration(userId, 'reject'),
   }

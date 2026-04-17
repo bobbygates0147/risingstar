@@ -48,6 +48,9 @@ export type AuthUser = {
   registrationVerificationStatus?: 'pending' | 'verified' | 'rejected'
   registrationVerifiedAt?: string | null
   registrationPaidAt?: string | null
+  kycVerificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected'
+  kycVerifiedAt?: string | null
+  kycReference?: string
   aiBotFeeUsd?: number
   aiBotEnabled?: boolean
   aiBotPaymentMethod?: string

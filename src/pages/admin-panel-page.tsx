@@ -52,6 +52,22 @@ function formatMethod(value: string) {
   return 'Crypto Wallet'
 }
 
+function formatKycStatus(value: string) {
+  if (value === 'verified') {
+    return 'Verified'
+  }
+
+  if (value === 'rejected') {
+    return 'Rejected'
+  }
+
+  if (value === 'pending') {
+    return 'Pending'
+  }
+
+  return 'Not Verified'
+}
+
 export function AdminPanelPage() {
   const PAGE_SIZE = 5
   const {
@@ -66,6 +82,8 @@ export function AdminPanelPage() {
     rejectTaskPack,
     verifyAIBot,
     rejectAIBot,
+    verifyKyc,
+    rejectKyc,
     approveRegistration,
     rejectRegistration,
   } = useAdminOverview()
@@ -153,7 +171,7 @@ export function AdminPanelPage() {
         )}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
@@ -237,6 +255,18 @@ export function AdminPanelPage() {
             {stats.pendingTaskPacks ?? 0}
           </p>
         </article>
+
+        <article className="min-w-0 rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-panel)] px-5 py-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              Pending KYC
+            </p>
+            <ShieldAlert className="h-4 w-4 text-amber-200" />
+          </div>
+          <p className="mt-2 font-display text-3xl font-semibold text-[var(--text-primary)]">
+            {stats.pendingKyc ?? 0}
+          </p>
+        </article>
       </section>
 
       <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
@@ -253,7 +283,7 @@ export function AdminPanelPage() {
           ) : (
             <>
               <div className="thin-scrollbar mt-4 max-w-full overflow-x-auto">
-                <table className="min-w-[62rem] table-fixed border-separate border-spacing-y-2 text-sm">
+                <table className="min-w-[72rem] table-fixed border-separate border-spacing-y-2 text-sm">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                       <th className="w-24 px-3 py-2 font-medium">Name</th>
@@ -261,6 +291,7 @@ export function AdminPanelPage() {
                       <th className="w-20 px-3 py-2 font-medium">Tier</th>
                       <th className="w-24 px-3 py-2 font-medium">Status</th>
                       <th className="w-64 px-3 py-2 font-medium">Registration Deposit</th>
+                      <th className="w-40 px-3 py-2 font-medium">KYC</th>
                       <th className="w-24 px-3 py-2 font-medium">AI Bot</th>
                       <th className="w-36 px-3 py-2 font-medium">AI Verification</th>
                     </tr>
@@ -321,6 +352,48 @@ export function AdminPanelPage() {
                                 </button>
                               </div>
                             )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex min-w-0 flex-col gap-2">
+                            <span
+                              className={`text-xs font-semibold uppercase ${statusTone(user.kycVerificationStatus)}`}
+                            >
+                              {formatKycStatus(user.kycVerificationStatus)}
+                            </span>
+                            {user.kycReference ? (
+                              <span className="break-all text-[11px] uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                                {user.kycReference}
+                              </span>
+                            ) : null}
+                            {user.kycVerificationStatus === 'verified' && (
+                              <span className="text-[11px] text-[var(--text-tertiary)]">
+                                {formatDateTime(user.kycVerifiedAt)}
+                              </span>
+                            )}
+                            {user.role !== 'admin' &&
+                              user.kycVerificationStatus !== 'verified' && (
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => verifyKyc(user.id)}
+                                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Verify
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => rejectKyc(user.id)}
+                                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-400/35 bg-rose-500/10 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
                           </div>
                         </td>
                         <td

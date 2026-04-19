@@ -191,7 +191,7 @@ export function LoginPage() {
         title: `Welcome back, ${displayName}`,
         description: isRegistrationVerified(authResponse.user)
           ? 'Your dashboard is ready.'
-          : 'Your registration deposit is still waiting for admin confirmation.',
+          : 'Your account is in review. Access will unlock shortly.',
       })
 
       navigate(
@@ -726,7 +726,7 @@ export function SignupPaymentPage() {
       showToast({
         variant: 'success',
         title: `Welcome, ${authResponse.user.name || draft.name}`,
-        description: 'Your deposit reference was submitted for admin confirmation.',
+        description: 'Your account is in review. Access will unlock shortly.',
       })
 
       clearSignupDraft()
@@ -897,6 +897,7 @@ export function RegistrationPendingPage() {
   const navigate = useNavigate()
   const [user, setUser] = useState(() => getAuthenticatedUser())
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [reviewProgress, setReviewProgress] = useState(18)
   const status = user?.registrationVerificationStatus || 'pending'
   const isRejected = status === 'rejected'
 
@@ -936,6 +937,24 @@ export function RegistrationPendingPage() {
     return () => window.clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    if (isRejected) {
+      return
+    }
+
+    const progressInterval = window.setInterval(() => {
+      setReviewProgress((current) => {
+        if (current >= 92) {
+          return 28
+        }
+
+        return Math.min(92, current + 7)
+      })
+    }, 900)
+
+    return () => window.clearInterval(progressInterval)
+  }, [isRejected])
+
   function handleSignOut() {
     signOut()
     navigate('/login', { replace: true })
@@ -943,11 +962,11 @@ export function RegistrationPendingPage() {
 
   return (
     <AuthLayout
-      title={isRejected ? 'Deposit Not Approved' : 'Deposit Pending'}
+      title={isRejected ? 'Review Required' : 'Account Review'}
       subtitle={
         isRejected
-          ? 'Your registration payment needs another review.'
-          : 'Your account opens after admin confirms your registration deposit.'
+          ? 'Your payment details need to be updated before access can be unlocked.'
+          : 'We are finalising your account setup and payment review.'
       }
     >
       <section className="surface-glow rounded-[28px] border border-[var(--border-soft)] bg-[var(--surface-panel)] p-6 text-[var(--text-primary)] shadow-[var(--shadow-panel)] backdrop-blur-xl sm:p-8">
@@ -960,7 +979,7 @@ export function RegistrationPendingPage() {
               Registration status
             </p>
             <h2 className="mt-1 font-display text-2xl font-semibold">
-              {isRejected ? 'Payment needs attention' : 'Waiting for approval'}
+              {isRejected ? 'Action needed' : 'In review'}
             </h2>
           </div>
         </div>
@@ -968,9 +987,26 @@ export function RegistrationPendingPage() {
         <div className="mt-5 rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">
           <p>
             {isRejected
-              ? 'The submitted deposit reference was rejected. Contact support or register again with a valid payment reference.'
-              : 'Your payment reference has been submitted. An admin must confirm the deposit before your dashboard, wallet, and task queue go live.'}
+              ? 'We could not complete the review with the payment details provided. Update your reference or contact support to continue.'
+              : 'Your account and payment are being reviewed. Dashboard, wallet, and task access will unlock automatically once the review is complete.'}
           </p>
+          {!isRejected ? (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
+                <span>Setup progress</span>
+                <span>{reviewProgress}%</span>
+              </div>
+              <div className="registration-review-progress mt-2">
+                <span
+                  className="registration-review-progress__bar"
+                  style={{ width: `${reviewProgress}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+                Final checks are in progress.
+              </p>
+            </div>
+          ) : null}
           {user?.registrationPaymentReference ? (
             <p className="mt-3 break-all text-xs text-[var(--text-tertiary)]">
               Reference: {user.registrationPaymentReference}

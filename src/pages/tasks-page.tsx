@@ -56,15 +56,14 @@ const TASK_PACK_ENDPOINT = `${API_BASE_URL}/api/tasks/purchase-pack`
 const TASK_PACKS_ENDPOINT = `${API_BASE_URL}/api/tasks/packs`
 const TASK_PACK_HISTORY_ENDPOINT = `${API_BASE_URL}/api/tasks/packs/history`
 const WALLET_UPDATED_EVENT = 'rising-star:wallet-updated'
-const DEFAULT_TASK_PACKS: TaskPack[] = [
-  { id: 'pack-5', label: '5 tasks', tasks: 5, priceUsd: 2 },
-  { id: 'pack-10', label: '10 tasks', tasks: 10, priceUsd: 4 },
-  { id: 'pack-25', label: '25 tasks', tasks: 25, priceUsd: 10 },
-  { id: 'pack-50', label: '50 tasks', tasks: 50, priceUsd: 20 },
-  { id: 'pack-75', label: '75 tasks', tasks: 75, priceUsd: 30 },
-  { id: 'pack-100', label: '100 tasks', tasks: 100, priceUsd: 40 },
-  { id: 'pack-125', label: '125 tasks', tasks: 125, priceUsd: 50 },
-]
+const DEFAULT_TASK_PACK_SIZES = [5, 10, 25, 50, 75, 100, 125]
+const TASK_PACK_PRICE_PER_TASK_USD = 0.4
+const DEFAULT_TASK_PACKS: TaskPack[] = DEFAULT_TASK_PACK_SIZES.map((tasks) => ({
+  id: `pack-${tasks}`,
+  label: `${tasks} tasks`,
+  tasks,
+  priceUsd: Number((tasks * TASK_PACK_PRICE_PER_TASK_USD).toFixed(2)),
+}))
 const SUPPORTED_PROOF_MIME_TYPES = new Map<string, string>([
   ['image/jpeg', 'jpg'],
   ['image/jpg', 'jpg'],

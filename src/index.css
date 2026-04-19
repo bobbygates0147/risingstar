@@ -428,6 +428,29 @@ button {
   animation-fill-mode: forwards;
 }
 
+.registration-review-progress {
+  height: 10px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.registration-review-progress__bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--glow), var(--blue), #34d399);
+  box-shadow:
+    0 0 20px rgba(124, 58, 237, 0.28),
+    0 0 34px rgba(59, 130, 246, 0.18);
+  transition: width 0.8s ease;
+  animation: registration-review-glow 2.4s ease-in-out infinite;
+}
+
 @keyframes toast-enter {
   0% {
     opacity: 0;
@@ -437,6 +460,17 @@ button {
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes registration-review-glow {
+  0%,
+  100% {
+    filter: saturate(1) brightness(0.98);
+  }
+
+  50% {
+    filter: saturate(1.2) brightness(1.08);
   }
 }
 
